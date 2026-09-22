@@ -543,6 +543,7 @@ export default function App() {
                 onOpenEMR={(p) => setSelectedEMRPatient(p)}
                 onUpdatePatient={handleUpdatePatient}
                 onAddPatient={handleAddPatient}
+                onShowToast={showToast}
               />
             )}
 

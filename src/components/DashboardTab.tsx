@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Patient, Treatment, Appointment, Invoice } from '../types';
 import { RevisitPatientsWidget } from './dashboard/RevisitPatientsWidget';
-import { getPatientsDueForRevisitInNext3Days } from '../utils/revisitUtils';
+import {
+  getPatientsDueForRevisitInNext3Days,
+  getOverdueRevisitPatients,
+} from '../utils/revisitUtils';
+import { RevisitReminderConfirmationModal } from './dashboard/RevisitReminderConfirmationModal';
 import {
   Users,
   Calendar,
@@ -16,6 +20,11 @@ import {
   Sparkles,
   Upload,
   CalendarClock,
+  AlertTriangle,
+  AlertCircle,
+  Bell,
+  BellRing,
+  Send,
 } from 'lucide-react';
 
 interface DashboardTabProps {
@@ -29,6 +38,7 @@ interface DashboardTabProps {
   onOpenEMR?: (patient: Patient) => void;
   onUpdatePatient?: (patient: Patient) => void;
   onAddPatient?: (patient: Patient) => void;
+  onShowToast?: (message: string) => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -42,11 +52,28 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onOpenEMR,
   onUpdatePatient,
   onAddPatient,
+  onShowToast,
 }) => {
+  const [isBulkOverdueModalOpen, setIsBulkOverdueModalOpen] = useState(false);
+
   const totalPatients = patients.length;
   const activeAppts = appointments.filter((a) => a.status !== 'Hoàn thành').length;
   const ongoingTreatments = treatments.filter((t) => t.status === 'Đang điều trị').length;
   const revisitDue3Days = getPatientsDueForRevisitInNext3Days(patients, treatments, 3, false).length;
+
+  // Danh sách bệnh nhân quá hạn tái khám mà chưa thực hiện
+  const overduePatients = useMemo(() => {
+    return getOverdueRevisitPatients(patients, treatments);
+  }, [patients, treatments]);
+
+  // Toast notification cảnh báo khi có ca quá hạn trên Dashboard
+  useEffect(() => {
+    if (overduePatients.length > 0 && onShowToast) {
+      onShowToast(
+        `🚨 CẢNH BÁO DASHBOARD: Có ${overduePatients.length} bệnh nhân có lịch tái khám đã quá hạn mà CHƯA THỰC HIỆN! Hãy gửi thông báo nhắc hẹn.`
+      );
+    }
+  }, [overduePatients.length]);
 
   const paidRevenue = invoices
     .filter((i) => i.status === 'Đã thanh toán')
@@ -68,6 +95,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   const formatCurrency = (val: number) => {
     return val.toLocaleString('vi-VN') + ' ₫';
+  };
+
+  const scrollToRevisits = () => {
+    const el = document.getElementById('revisit-patients-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   return (
@@ -122,6 +156,69 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </div>
 
+      {/* CẢNH BÁO MÀU ĐỎ TRÊN DASHBOARD: BỆNH NHÂN CÓ LỊCH TÁI KHÁM QUÁ HẠN MÀ CHƯA THỰC HIỆN */}
+      {overduePatients.length > 0 && (
+        <div className="bg-gradient-to-r from-red-600 via-rose-600 to-red-700 rounded-3xl p-5 sm:p-6 text-white shadow-xl shadow-red-900/20 border-2 border-red-400 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 animate-in fade-in duration-300">
+          <div className="flex items-start sm:items-center space-x-4">
+            <div className="w-13 h-13 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0 animate-pulse border border-white/40 shadow-inner">
+              <AlertTriangle className="w-7 h-7 text-amber-200" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-white text-red-700 text-xs font-black uppercase tracking-wider shadow-xs">
+                  🚨 CẢNH BÁO MÀU ĐỎ: QUÁ HẠN TÁI KHÁM
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-black/25 text-amber-200 text-xs font-bold">
+                  {overduePatients.length} bệnh nhân chưa đến khám
+                </span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-white">
+                Có {overduePatients.length} bệnh nhân đã quá hạn lịch tái khám nhưng CHƯA THỰC HIỆN!
+              </h3>
+              <p className="text-xs sm:text-sm text-rose-100 max-w-2xl leading-relaxed">
+                Các ca trễ hẹn có nguy cơ tái phát cơn đau hoặc đứt gãy phác đồ. Hệ thống đã đánh dấu cảnh báo màu đỏ trên Dashboard để nhân viên y tế gửi thông báo trực tiếp.
+              </p>
+
+              {/* Danh sách tên bệnh nhân trễ hẹn tóm tắt */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                {overduePatients.map((item) => (
+                  <span
+                    key={item.patient.id}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-black/20 text-white text-xs font-bold border border-white/20"
+                  >
+                    <span>{item.patient.name}</span>
+                    <span className="text-amber-200 text-[10px]">
+                      (Trễ {Math.abs(item.daysRemaining)} ngày)
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 flex-shrink-0 w-full lg:w-auto">
+            <button
+              type="button"
+              onClick={scrollToRevisits}
+              className="flex-1 sm:flex-initial px-4 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 backdrop-blur-md rounded-2xl text-xs sm:text-sm font-bold transition flex items-center justify-center space-x-1.5"
+            >
+              <span>Xem Tại Bảng Cảnh Báo</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsBulkOverdueModalOpen(true)}
+              className="flex-1 sm:flex-initial px-5 py-3 bg-white text-red-700 hover:bg-red-50 rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center space-x-2 shadow-lg shadow-red-950/30 transition transform active:scale-95"
+            >
+              <Send className="w-4 h-4 text-red-600" />
+              <span>Gửi Thông Báo Cho Bệnh Nhân ({overduePatients.length})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div
@@ -146,26 +243,49 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
         <div
           onClick={() => onNavigateTab('appointments')}
-          className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition cursor-pointer flex items-center justify-between"
+          className={`p-5 rounded-3xl transition cursor-pointer flex items-center justify-between ${
+            overduePatients.length > 0
+              ? 'bg-rose-50/70 border-2 border-red-500 shadow-md shadow-red-500/10'
+              : 'bg-white border border-slate-100 shadow-sm hover:shadow-md'
+          }`}
         >
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Lịch Hẹn Đang Theo Dõi
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <span>Lịch Hẹn Đang Theo Dõi</span>
+              {overduePatients.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+              )}
             </span>
-            <h3 className="text-3xl font-extrabold text-slate-900 mt-1">
-              {activeAppts}
+            <h3 className="text-3xl font-extrabold text-slate-900 mt-1 flex items-baseline gap-2">
+              <span>{activeAppts}</span>
+              {overduePatients.length > 0 && (
+                <span className="text-xs font-extrabold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                  {overduePatients.length} trễ hẹn
+                </span>
+              )}
             </h3>
-            <span className="text-xs text-indigo-600 font-semibold mt-2 inline-flex items-center">
-              {revisitDue3Days > 0 ? (
+            <span className="text-xs font-semibold mt-2 inline-flex items-center">
+              {overduePatients.length > 0 ? (
+                <span className="text-red-600 font-extrabold flex items-center">
+                  <AlertCircle className="w-3.5 h-3.5 mr-1" />
+                  {overduePatients.length} ca quá hạn chưa tái khám!
+                </span>
+              ) : revisitDue3Days > 0 ? (
                 <span className="text-rose-600 font-bold">
                   {revisitDue3Days} ca tái khám 3 ngày tới
                 </span>
               ) : (
-                'Lấy tự động từ EMR'
+                <span className="text-indigo-600">Lấy tự động từ EMR</span>
               )}
             </span>
           </div>
-          <div className="w-13 h-13 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shadow-inner">
+          <div
+            className={`w-13 h-13 rounded-2xl flex items-center justify-center text-xl shadow-inner ${
+              overduePatients.length > 0
+                ? 'bg-red-100 text-red-600 animate-pulse'
+                : 'bg-indigo-50 text-indigo-600'
+            }`}
+          >
             <Calendar className="w-6 h-6" />
           </div>
         </div>
@@ -212,14 +332,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       </div>
 
       {/* TÍCH HỢP TÍNH NĂNG: BỆNH NHÂN CẦN TÁI KHÁM TRONG 3 NGÀY TỚI TRÊN DASHBOARD (DỰA TRÊN DỮ LIỆU EMR) */}
-      <RevisitPatientsWidget
-        patients={patients}
-        treatments={treatments}
-        onOpenEMR={onOpenEMR}
-        onNavigateTab={onNavigateTab}
-        onUpdatePatient={onUpdatePatient}
-        onAddPatient={onAddPatient}
-      />
+      <div id="revisit-patients-section">
+        <RevisitPatientsWidget
+          patients={patients}
+          treatments={treatments}
+          onOpenEMR={onOpenEMR}
+          onNavigateTab={onNavigateTab}
+          onUpdatePatient={onUpdatePatient}
+          onAddPatient={onAddPatient}
+          onShowToast={onShowToast}
+        />
+      </div>
 
       {/* Main Grid: Body Part Distribution & Upcoming Appointments */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -332,6 +455,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Modal gửi thông báo quá hạn từ banner Dashboard */}
+      {isBulkOverdueModalOpen && (
+        <RevisitReminderConfirmationModal
+          bulkItems={overduePatients}
+          isOpen={isBulkOverdueModalOpen}
+          onClose={() => setIsBulkOverdueModalOpen(false)}
+          onUpdatePatient={onUpdatePatient}
+          onSuccessToast={onShowToast}
+        />
+      )}
     </div>
   );
 };

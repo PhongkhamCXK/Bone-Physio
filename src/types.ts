@@ -133,6 +133,24 @@ export interface Patient {
   nextRevisitDate?: string; // Ngày hẹn tái khám trong EMR (VD: 2026-09-24)
   revisitNotes?: string; // Ghi chú chỉ định tái khám từ Bác sĩ (VD: Đánh giá lại tầm vận động & giảm đau)
   revisitDoctor?: string; // Bác sĩ hẹn tái khám
+  revisitCompleted?: boolean; // Đã thực hiện tái khám chưa (true = đã thực hiện, false/undefined = chưa)
+  revisitCompletedDate?: string; // Ngày hoàn thành tái khám
+  lastRevisitReminderSentAt?: string; // Thời điểm gần nhất gửi thông báo nhắc hẹn
+  revisitReminderLogs?: RevisitReminderLog[]; // Lịch sử các lần gửi thông báo
+}
+
+export interface RevisitReminderLog {
+  id: string;
+  sentAt: string;
+  channel: 'sms' | 'push' | 'portal' | 'zalo' | 'phone';
+  message: string;
+  senderName: string;
+  apiProvider?: string; // 'eSMS.vn' | 'SpeedSMS' | 'Web Push API' | 'Twilio' | 'Zalo ZNS'
+  transactionId?: string; // 'TXN_SMS_...'
+  status?: 'DELIVERED' | 'SENT' | 'PENDING' | 'FAILED';
+  phone?: string;
+  cost?: number; // VND
+  isOverdueCase?: boolean; // true nếu là ca quá hạn, false nếu là ca sắp tới
 }
 
 export interface Invoice {

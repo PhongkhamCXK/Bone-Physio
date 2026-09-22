@@ -247,6 +247,45 @@ export const INITIAL_PATIENTS: Patient[] = [
     assignedExercises: [],
     additionalRegions: [],
   },
+  {
+    id: 'BN003',
+    name: 'Lê Hoàng Long',
+    age: 52,
+    gender: 'Nam',
+    phone: '0903123456',
+    password: '123',
+    bodyPart: 'Cột sống ngực',
+    diagnosis: 'Thoát vị đĩa đệm D6-D7 chèn ép thần kinh liên sườn, co thắt cơ gai sống',
+    occupation: 'Kỹ sư xây dựng công trình',
+    chiefComplaint: 'Đau tức giữa lưng lan ra mạng sườn, khó hít sâu',
+    history: 'Đau kéo dài 2 tháng, tăng nặng sau khi nâng giàn giáo nặng tại công trường.',
+    firstVisitDateTime: new Date().toISOString().slice(0, 16),
+    nextRevisitDate: getRelativeDateStr(-2), // Quá hạn 2 ngày mà chưa thực hiện
+    revisitNotes: 'Tái khám đánh giá lại độ giãn nở lồng ngực và mức độ co thắt cơ gai sống sau liệu trình sóng ngắn & siêu âm xung',
+    revisitDoctor: 'BS. CKII Hoàng Minh',
+    revisitCompleted: false,
+    dietPlan: STANDARD_DIET_PLAN,
+    healthMetrics: [
+      {
+        id: 'HM004',
+        date: getRelativeDateStr(-7),
+        painScore: 8,
+        rangeOfMotion: 'Hạn chế xoay ngực 60%',
+        bloodPressure: '130/85 mmHg',
+        notes: 'Co rút khối cơ cạnh cột sống ngực D5-D8, đau chói khi xoay thân.',
+      },
+      {
+        id: 'HM005',
+        date: getRelativeDateStr(-3),
+        painScore: 5,
+        rangeOfMotion: 'Xoay ngực cải thiện 65%',
+        bloodPressure: '122/80 mmHg',
+        notes: 'Giảm đau đáng kể sau 4 buổi siêu âm xung điều trị.',
+      },
+    ],
+    assignedExercises: [],
+    additionalRegions: [],
+  },
 ];
 
 export const INITIAL_TREATMENTS: Treatment[] = [];

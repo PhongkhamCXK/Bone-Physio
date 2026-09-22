@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Patient, BodyRegion, Treatment, HealthMetric } from '../types';
 import { AddRegionModal } from './AddRegionModal';
+import { RevisitReminderConfirmationModal } from './dashboard/RevisitReminderConfirmationModal';
+import { RevisitItem } from '../utils/revisitUtils';
 import {
   X,
   Printer,
@@ -18,6 +20,11 @@ import {
   ShieldCheck,
   AlertCircle,
   Clock,
+  Send,
+  Smartphone,
+  Bell,
+  MessageSquare,
+  Key,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
 
@@ -59,6 +66,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   const [revisitDateInput, setRevisitDateInput] = useState(patient?.nextRevisitDate || '');
   const [revisitNotesInput, setRevisitNotesInput] = useState(patient?.revisitNotes || '');
   const [isRevisitSaved, setIsRevisitSaved] = useState(false);
+  const [isSendReminderOpen, setIsSendReminderOpen] = useState(false);
 
   React.useEffect(() => {
     if (patient) {
@@ -315,16 +323,29 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   </div>
                 </div>
 
-                {patient.nextRevisitDate ? (
-                  <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-indigo-100/80 text-indigo-800 rounded-xl text-xs font-bold self-start sm:self-auto">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Lịch hẹn: {patient.nextRevisitDate}</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200/60 self-start sm:self-auto">
-                    Chưa hẹn ngày tái khám
-                  </span>
-                )}
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  {patient.nextRevisitDate ? (
+                    <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-indigo-100/80 text-indigo-800 rounded-xl text-xs font-bold">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Lịch hẹn: {patient.nextRevisitDate}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200/60">
+                      Chưa hẹn ngày tái khám
+                    </span>
+                  )}
+
+                  {/* Nút gửi SMS / Push API trực tiếp trong EMR */}
+                  <button
+                    type="button"
+                    onClick={() => setIsSendReminderOpen(true)}
+                    className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center space-x-1.5 transition active:scale-95"
+                    title="Gửi tin nhắn SMS Brandname hoặc thông báo đẩy cho bệnh nhân này"
+                  >
+                    <Send className="w-3.5 h-3.5 text-amber-200" />
+                    <span>Gửi SMS / Push API</span>
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleSaveRevisit} className="space-y-3 pt-1">
@@ -407,6 +428,89 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   </div>
                 </div>
               </form>
+
+              {/* NHẬT KÝ GỬI SMS & THÔNG BÁO ĐẨY TÁI KHÁM (EMR LOG) */}
+              <div className="pt-3 border-t border-indigo-100/80">
+                <div className="flex items-center justify-between mb-2">
+                  <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Nhật Ký Gửi SMS & Thông Báo Đẩy (EMR Messaging History)</span>
+                    <span className="text-[11px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.2 rounded-full">
+                      {patient.revisitReminderLogs?.length || 0}
+                    </span>
+                  </h5>
+                  {patient.lastRevisitReminderSentAt && (
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Gần nhất: <strong>{patient.lastRevisitReminderSentAt}</strong>
+                    </span>
+                  )}
+                </div>
+
+                {patient.revisitReminderLogs && patient.revisitReminderLogs.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {patient.revisitReminderLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="p-3 bg-white rounded-xl border border-indigo-100/70 shadow-2xs space-y-1 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <div className="flex items-center space-x-2">
+                            <span
+                              className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
+                                log.channel === 'sms'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : log.channel === 'push'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : log.channel === 'zalo'
+                                  ? 'bg-cyan-100 text-cyan-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
+                            >
+                              {log.channel === 'sms'
+                                ? 'SMS Brandname'
+                                : log.channel === 'push'
+                                ? 'Web Push API'
+                                : log.channel === 'zalo'
+                                ? 'Zalo ZNS'
+                                : 'Portal Chat'}
+                            </span>
+                            <span className="font-mono text-slate-500 text-[11px]">
+                              {log.transactionId || 'API_DIRECT'}
+                            </span>
+                            {log.apiProvider && (
+                              <span className="text-slate-400 text-[11px]">
+                                • {log.apiProvider}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center space-x-2 text-[11px] text-slate-500">
+                            <span>{log.sentAt}</span>
+                            <span className="text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                              ✓ {log.status || 'DELIVERED'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-slate-700 font-sans text-xs bg-slate-50/70 p-2 rounded-lg border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                          {log.message}
+                        </p>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                          <span>Người phát lệnh: <strong>{log.senderName}</strong></span>
+                          {log.cost !== undefined && log.cost > 0 && (
+                            <span>Chi phí API: {log.cost.toLocaleString('vi-VN')} ₫</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-white/70 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                    Chưa có nhật ký gửi SMS hoặc thông báo đẩy nào trong hồ sơ EMR của bệnh nhân này. Nhấp <strong>"Gửi SMS / Push API"</strong> ở trên để phát lệnh.
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Health Metrics (Bảng theo dõi chỉ số sức khỏe & tiến triển) */}
@@ -690,6 +794,35 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
           onAddRegion(newRegion, autoTreatment);
         }}
       />
+
+      {/* Modal Gửi SMS / Push API Nhắc Tái Khám */}
+      {isSendReminderOpen && patient && (
+        <RevisitReminderConfirmationModal
+          isOpen={isSendReminderOpen}
+          onClose={() => setIsSendReminderOpen(false)}
+          revisitItem={{
+            patient,
+            revisitDate: patient.nextRevisitDate || new Date().toISOString().split('T')[0],
+            daysRemaining: (() => {
+              if (!patient.nextRevisitDate) return 0;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const t = new Date(patient.nextRevisitDate);
+              t.setHours(0, 0, 0, 0);
+              return Math.round((t.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            })(),
+            statusLabel: patient.nextRevisitDate ? 'Hẹn tái khám' : 'Hẹn mới',
+            urgency: 'upcoming',
+            notes: patient.revisitNotes || patient.diagnosis || 'Tái khám định kỳ EMR',
+            bodyPart: patient.bodyPart,
+            doctor: patient.revisitDoctor || 'BS. CKII Hoàng Minh',
+            source: 'Hồ sơ EMR bệnh nhân',
+            isCompleted: patient.revisitCompleted || false,
+            lastReminderSentAt: patient.lastRevisitReminderSentAt,
+          }}
+          onUpdatePatient={onUpdatePatient}
+        />
+      )}
     </>
   );
 };

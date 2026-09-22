@@ -3,13 +3,15 @@ import { Patient, Treatment } from '../types';
 export interface RevisitItem {
   patient: Patient;
   revisitDate: string; // YYYY-MM-DD
-  daysRemaining: number; // 0 = Hôm nay, 1 = Ngày mai, 2 = Sau 2 ngày, 3 = Sau 3 ngày
+  daysRemaining: number; // 0 = Hôm nay, 1 = Ngày mai, 2 = Sau 2 ngày, 3 = Sau 3 ngày, < 0 = Quá hạn
   statusLabel: string;
   urgency: 'overdue' | 'today' | 'tomorrow' | 'upcoming';
   notes: string;
   bodyPart: string;
   doctor: string;
   source: string;
+  isCompleted?: boolean;
+  lastReminderSentAt?: string;
 }
 
 /**
@@ -63,6 +65,9 @@ export function getPatientsDueForRevisitInNext3Days(
   const processedPatientIds = new Set<string>();
 
   patients.forEach((patient) => {
+    // Nếu bệnh nhân đã hoàn thành đợt tái khám này thì bỏ qua
+    if (patient.revisitCompleted) return;
+
     // 1. Kiểm tra ngày hẹn tái khám trực tiếp trong EMR của bệnh nhân
     let targetDateStr = patient.nextRevisitDate || '';
     let notes = patient.revisitNotes || patient.diagnosis || 'Tái khám định kỳ EMR';
@@ -101,11 +106,11 @@ export function getPatientsDueForRevisitInNext3Days(
     );
 
     // Kiểm tra phạm vi: trong 3 ngày tới (0 <= diffDays <= 3)
-    // hoặc đã quá hạn gần đây (diffDays < 0 và >= -3) nếu được bật
+    // hoặc đã quá hạn mà chưa thực hiện (diffDays < 0) nếu được bật
     const isWithinNext3Days = diffDays >= 0 && diffDays <= maxDays;
-    const isRecentlyOverdue = includeOverdue && diffDays < 0 && diffDays >= -3;
+    const isOverdue = includeOverdue && diffDays < 0;
 
-    if (isWithinNext3Days || isRecentlyOverdue) {
+    if (isWithinNext3Days || isOverdue) {
       let statusLabel = '';
       let urgency: RevisitItem['urgency'] = 'upcoming';
 
@@ -138,17 +143,29 @@ export function getPatientsDueForRevisitInNext3Days(
         bodyPart: patient.bodyPart,
         doctor,
         source,
+        isCompleted: patient.revisitCompleted || false,
+        lastReminderSentAt: patient.lastRevisitReminderSentAt,
       });
 
       processedPatientIds.add(patient.id);
     }
   });
 
-  // Sắp xếp: Ưu tiên Hôm nay -> Ngày mai -> Sau 2 ngày -> Sau 3 ngày -> Quá hạn
+  // Sắp xếp: Ưu tiên Quá hạn -> Hôm nay -> Ngày mai -> Sau 2 ngày -> Sau 3 ngày
   return results.sort((a, b) => {
-    // Sắp xếp ngày tăng dần
     return a.daysRemaining - b.daysRemaining;
   });
+}
+
+/**
+ * Lấy danh sách những bệnh nhân có lịch tái khám đã quá hạn mà CHƯA THỰC HIỆN
+ */
+export function getOverdueRevisitPatients(
+  patients: Patient[],
+  treatments: Treatment[] = []
+): RevisitItem[] {
+  const all = getPatientsDueForRevisitInNext3Days(patients, treatments, 3, true);
+  return all.filter((item) => item.daysRemaining < 0 && !item.isCompleted);
 }
 
 /**
