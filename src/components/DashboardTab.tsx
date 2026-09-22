@@ -1,5 +1,7 @@
 import React from 'react';
 import { Patient, Treatment, Appointment, Invoice } from '../types';
+import { RevisitPatientsWidget } from './dashboard/RevisitPatientsWidget';
+import { getPatientsDueForRevisitInNext3Days } from '../utils/revisitUtils';
 import {
   Users,
   Calendar,
@@ -13,6 +15,7 @@ import {
   Clock,
   Sparkles,
   Upload,
+  CalendarClock,
 } from 'lucide-react';
 
 interface DashboardTabProps {
@@ -23,6 +26,9 @@ interface DashboardTabProps {
   onNavigateTab: (tabId: string) => void;
   onExportDualFiles: () => void;
   onOpenImport?: () => void;
+  onOpenEMR?: (patient: Patient) => void;
+  onUpdatePatient?: (patient: Patient) => void;
+  onAddPatient?: (patient: Patient) => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -33,10 +39,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onNavigateTab,
   onExportDualFiles,
   onOpenImport,
+  onOpenEMR,
+  onUpdatePatient,
+  onAddPatient,
 }) => {
   const totalPatients = patients.length;
   const activeAppts = appointments.filter((a) => a.status !== 'Hoàn thành').length;
   const ongoingTreatments = treatments.filter((t) => t.status === 'Đang điều trị').length;
+  const revisitDue3Days = getPatientsDueForRevisitInNext3Days(patients, treatments, 3, false).length;
 
   const paidRevenue = invoices
     .filter((i) => i.status === 'Đã thanh toán')
@@ -146,7 +156,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               {activeAppts}
             </h3>
             <span className="text-xs text-indigo-600 font-semibold mt-2 inline-flex items-center">
-              Lấy tự động từ EMR
+              {revisitDue3Days > 0 ? (
+                <span className="text-rose-600 font-bold">
+                  {revisitDue3Days} ca tái khám 3 ngày tới
+                </span>
+              ) : (
+                'Lấy tự động từ EMR'
+              )}
             </span>
           </div>
           <div className="w-13 h-13 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shadow-inner">
@@ -194,6 +210,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* TÍCH HỢP TÍNH NĂNG: BỆNH NHÂN CẦN TÁI KHÁM TRONG 3 NGÀY TỚI TRÊN DASHBOARD (DỰA TRÊN DỮ LIỆU EMR) */}
+      <RevisitPatientsWidget
+        patients={patients}
+        treatments={treatments}
+        onOpenEMR={onOpenEMR}
+        onNavigateTab={onNavigateTab}
+        onUpdatePatient={onUpdatePatient}
+        onAddPatient={onAddPatient}
+      />
 
       {/* Main Grid: Body Part Distribution & Upcoming Appointments */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

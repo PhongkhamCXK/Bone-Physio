@@ -53,7 +53,17 @@ export default function App() {
   // Persistent or initial state
   const [patients, setPatients] = useState<Patient[]>(() => {
     const saved = localStorage.getItem('bp_patients');
-    return saved ? JSON.parse(saved) : INITIAL_PATIENTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return INITIAL_PATIENTS;
   });
 
   const [treatments, setTreatments] = useState<Treatment[]>(() => {
@@ -530,6 +540,9 @@ export default function App() {
                 onNavigateTab={setActiveTab}
                 onExportDualFiles={handleExportDual}
                 onOpenImport={() => setIsImportModalOpen(true)}
+                onOpenEMR={(p) => setSelectedEMRPatient(p)}
+                onUpdatePatient={handleUpdatePatient}
+                onAddPatient={handleAddPatient}
               />
             )}
 

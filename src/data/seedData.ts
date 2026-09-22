@@ -172,7 +172,82 @@ export const STANDARD_DIET_PLAN: DietDay[] = [
   },
 ];
 
-export const INITIAL_PATIENTS: Patient[] = [];
+const getRelativeDateStr = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+};
+
+export const INITIAL_PATIENTS: Patient[] = [
+  {
+    id: 'BN001',
+    name: 'Nguyễn Văn Hùng',
+    age: 48,
+    gender: 'Nam',
+    phone: '0912345678',
+    password: '123',
+    bodyPart: 'Thắt lưng',
+    diagnosis: 'Thoát vị đĩa đệm L4-L5 chèn ép rễ S1 bên phải',
+    occupation: 'Tài xế lái xe đường dài',
+    chiefComplaint: 'Đau nhức thắt lưng lan xuống bắp chân phải',
+    history: 'Đau âm ỉ 3 tháng, tăng khi ngồi lái xe lâu hoặc bê vác nặng.',
+    firstVisitDateTime: new Date().toISOString().slice(0, 16),
+    nextRevisitDate: getRelativeDateStr(1),
+    revisitNotes: 'Tái khám đánh giá lại độ co cứng cơ cạnh sống và kiểm tra đáp ứng sau liệu trình kéo giãn giảm áp DTS',
+    revisitDoctor: 'BS. CKII Hoàng Minh',
+    dietPlan: STANDARD_DIET_PLAN,
+    healthMetrics: [
+      {
+        id: 'HM001',
+        date: getRelativeDateStr(-3),
+        painScore: 7,
+        rangeOfMotion: 'Hạn chế gập ngửa cột sống 50%',
+        bloodPressure: '125/80 mmHg',
+        notes: 'Buổi khám đầu: Đau chói vùng L4-L5 khi ấn điểm đau Valleix (+).',
+      },
+      {
+        id: 'HM002',
+        date: getRelativeDateStr(-1),
+        painScore: 4,
+        rangeOfMotion: 'Cải thiện tầm vận động 75%',
+        bloodPressure: '120/80 mmHg',
+        notes: 'Sau 3 buổi trị liệu: Cảm giác tê bì giảm rõ rệt.',
+      },
+    ],
+    assignedExercises: [],
+    additionalRegions: [],
+  },
+  {
+    id: 'BN002',
+    name: 'Trần Thị Mai Phương',
+    age: 36,
+    gender: 'Nữ',
+    phone: '0987654321',
+    password: '123',
+    bodyPart: 'Cổ',
+    diagnosis: 'Hội chứng Cổ - Vai - Gáy, thoái hóa nhẹ C5-C6',
+    occupation: 'Kế toán trưởng',
+    chiefComplaint: 'Mỏi cổ gáy, tê ngón trỏ và ngón giữa tay phải',
+    history: 'Làm việc máy tính 8-10 tiếng/ngày, triệu chứng xuất hiện 1 tháng nay.',
+    firstVisitDateTime: new Date().toISOString().slice(0, 16),
+    nextRevisitDate: getRelativeDateStr(3),
+    revisitNotes: 'Kiểm tra biên độ xoay nghiêng cổ, đánh giá lại cảm giác bàn tay sau 5 buổi điện xung & sóng ngắn',
+    revisitDoctor: 'BS. CKI Nguyễn Văn An',
+    dietPlan: STANDARD_DIET_PLAN,
+    healthMetrics: [
+      {
+        id: 'HM003',
+        date: getRelativeDateStr(-2),
+        painScore: 6,
+        rangeOfMotion: 'Xoay cổ hạn chế 40%',
+        bloodPressure: '115/75 mmHg',
+        notes: 'Co thắt dải cơ thang trên và cơ nâng vai hai bên.',
+      },
+    ],
+    assignedExercises: [],
+    additionalRegions: [],
+  },
+];
 
 export const INITIAL_TREATMENTS: Treatment[] = [];
 

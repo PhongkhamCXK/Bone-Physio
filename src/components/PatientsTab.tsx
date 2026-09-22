@@ -51,6 +51,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
   );
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [history, setHistory] = useState('');
+  const [nextRevisitDate, setNextRevisitDate] = useState('');
+  const [revisitNotes, setRevisitNotes] = useState('');
 
   const handleOpenAdd = () => {
     setEditingPatient(null);
@@ -65,6 +67,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
     setFirstVisit(new Date().toISOString().slice(0, 16));
     setChiefComplaint('Đau mỏi cổ vai gáy');
     setHistory('Đau âm ỉ tăng dần khi ngồi lâu.');
+    setNextRevisitDate('');
+    setRevisitNotes('');
     setIsModalOpen(true);
   };
 
@@ -81,6 +85,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
     setFirstVisit(p.firstVisitDateTime || new Date().toISOString().slice(0, 16));
     setChiefComplaint(p.chiefComplaint || '');
     setHistory(p.history || '');
+    setNextRevisitDate(p.nextRevisitDate || '');
+    setRevisitNotes(p.revisitNotes || '');
     setIsModalOpen(true);
   };
 
@@ -100,6 +106,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
         firstVisitDateTime: firstVisit,
         chiefComplaint,
         history,
+        nextRevisitDate: nextRevisitDate || undefined,
+        revisitNotes: revisitNotes || undefined,
       });
     } else {
       const newPatient: Patient = {
@@ -115,6 +123,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
         firstVisitDateTime: firstVisit,
         chiefComplaint,
         history,
+        nextRevisitDate: nextRevisitDate || undefined,
+        revisitNotes: revisitNotes || undefined,
         dietPlan: STANDARD_DIET_PLAN,
         healthMetrics: [],
         assignedExercises: [],
@@ -446,6 +456,43 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
                   placeholder="Ghi chú bệnh sử ban đầu..."
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
+              </div>
+
+              {/* Lịch Hẹn Tái Khám EMR */}
+              <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-900">
+                    Lịch Hẹn Tái Khám (Hiển thị cảnh báo Dashboard)
+                  </span>
+                  <span className="text-[11px] text-indigo-600 font-medium">
+                    Tùy chọn
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Ngày tái khám
+                    </label>
+                    <input
+                      type="date"
+                      value={nextRevisitDate}
+                      onChange={(e) => setNextRevisitDate(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Mục tiêu / Chỉ định tái khám
+                    </label>
+                    <input
+                      type="text"
+                      value={revisitNotes}
+                      onChange={(e) => setRevisitNotes(e.target.value)}
+                      placeholder="VD: Kiểm tra lại biên độ gập duỗi, đo NRS..."
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>

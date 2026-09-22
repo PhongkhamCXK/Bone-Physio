@@ -130,6 +130,9 @@ export interface Patient {
   healthMetrics: HealthMetric[];
   assignedExercises?: string[];
   additionalRegions?: BodyRegion[]; // Các vùng mới tạo từ trang EMR
+  nextRevisitDate?: string; // Ngày hẹn tái khám trong EMR (VD: 2026-09-24)
+  revisitNotes?: string; // Ghi chú chỉ định tái khám từ Bác sĩ (VD: Đánh giá lại tầm vận động & giảm đau)
+  revisitDoctor?: string; // Bác sĩ hẹn tái khám
 }
 
 export interface Invoice {
