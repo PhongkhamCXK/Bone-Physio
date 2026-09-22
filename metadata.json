@@ -1,0 +1,6 @@
+{
+  "name": "Bone Physio - Quản Lý Phòng Khám & EMR",
+  "description": "Hệ thống quản lý phòng khám chuyên khoa cơ xương khớp, hồ sơ EMR, kế toán thu chi & tính thuế tích hợp, tự động xuất file Excel & JSON mỗi 24h với tên ngày-tháng-năm-giờ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
