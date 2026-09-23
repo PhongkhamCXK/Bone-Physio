@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppUser, Patient, Staff, Technician } from '../types';
-import { Lock, User, Shield, Key, Eye, EyeOff, Activity, Stethoscope } from 'lucide-react';
+import { Lock, User, Shield, Key, Eye, EyeOff, Activity, Stethoscope, HeartPulse } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen?: boolean;
@@ -155,7 +155,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mt-0.5">
             Cơ Xương Khớp & Phục Hồi Chức Năng
           </p>
-          <p className="text-xs text-slate-500 mt-1">
+          {/* USER REQUIREMENT: Dòng chữ chăm sóc sức khoẻ toàn diện */}
+          <div className="mt-2.5 inline-flex items-center justify-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 border border-emerald-300 shadow-xs">
+            <HeartPulse className="w-4 h-4 text-emerald-600 animate-pulse" />
+            <span className="text-xs font-black tracking-wide uppercase">
+              Chăm sóc sức khoẻ toàn diện
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
             Hệ thống Quản lý Phòng khám & Cổng Tra Cứu EMR
           </p>
         </div>
@@ -325,8 +332,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         {/* Subtle decorative background glow */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-        <div className="relative z-10 w-full flex justify-center">
+        <div className="relative z-10 w-full flex flex-col items-center justify-center">
           {formContent}
+          <div className="mt-4 flex items-center space-x-2 text-xs text-slate-300 font-semibold tracking-wide bg-slate-800/80 px-4 py-1.5 rounded-full border border-slate-700/60 shadow-lg">
+            <HeartPulse className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Phòng Khám Bone Physio • Chăm sóc sức khoẻ toàn diện</span>
+          </div>
         </div>
 
         {toastMessage && (

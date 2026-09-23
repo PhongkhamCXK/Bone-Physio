@@ -27,6 +27,8 @@ interface HeaderProps {
   onOpenCheckInOut?: () => void;
   pendingCheckInCount?: number;
   onLogout?: () => void;
+  upcomingNoticeCount?: number;
+  onToggleUpcomingAlerts?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,6 +42,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCheckInOut,
   pendingCheckInCount = 0,
   onLogout,
+  upcomingNoticeCount = 0,
+  onToggleUpcomingAlerts,
 }) => {
   const titles: Record<string, { title: string; subtitle: string }> = {
     dashboard: {
@@ -85,6 +89,18 @@ export const Header: React.FC<HeaderProps> = ({
     'patient-portal': {
       title: 'Cổng Bệnh Nhân Tra Cứu EMR',
       subtitle: 'Bệnh án điện tử, mốc tái khám và tiến trình hồi phục',
+    },
+    'patient-exercises': {
+      title: 'Bài Tập Phục Hồi Tại Nhà Bác Sĩ Chỉ Định',
+      subtitle: 'Phác đồ bài tập tự luyện tại nhà theo vùng đau kèm video hướng dẫn khoa học',
+    },
+    warranty: {
+      title: 'Quản Lý Bảo Hành & Chăm Sóc Định Kỳ',
+      subtitle: 'Chế độ bảo dưỡng, nắn chỉnh duy trì và theo dõi khách hàng sau khi hoàn tất liệu trình',
+    },
+    'patient-warranty': {
+      title: 'Thẻ Bảo Hành & Quyền Lợi Bảo Dưỡng Của Tôi',
+      subtitle: 'Chứng nhận bảo hành điện tử chính thức và số buổi bảo dưỡng định kỳ miễn phí',
     },
   };
 
@@ -227,18 +243,25 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Notification Bell */}
+        {/* Notification Bell with Upcoming Appointments Badge */}
         <button
-          onClick={() =>
-            alert(
-              'Hệ thống hoạt động bình thường. Tất cả dữ liệu EMR và liệu trình đã được lưu trữ an toàn.'
-            )
+          type="button"
+          onClick={onToggleUpcomingAlerts}
+          className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition relative cursor-pointer"
+          title={
+            upcomingNoticeCount > 0
+              ? `Có ${upcomingNoticeCount} lịch hẹn sắp diễn ra trong vòng 45 phút tới`
+              : 'Thông báo hệ thống (Không có lịch hẹn gấp)'
           }
-          className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition relative"
-          title="Thông báo"
         >
           <Bell className="w-4 h-4" />
-          <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white absolute top-2 right-2"></span>
+          {upcomingNoticeCount > 0 ? (
+            <span className="min-w-4 h-4 px-1 rounded-full bg-amber-500 text-white font-black text-[9px] flex items-center justify-center ring-2 ring-white absolute -top-1 -right-1 animate-pulse">
+              {upcomingNoticeCount}
+            </span>
+          ) : (
+            <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white absolute top-2 right-2"></span>
+          )}
         </button>
 
         {/* Đăng xuất / Thoát tài khoản */}

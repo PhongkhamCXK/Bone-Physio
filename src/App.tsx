@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Patient,
   Treatment,
@@ -11,6 +11,7 @@ import {
   BodyRegion,
   Expense,
   TaxConfig,
+  WarrantyRecord,
 } from './types';
 import {
   INITIAL_PATIENTS,
@@ -21,6 +22,7 @@ import {
   INITIAL_TECHNICIANS,
   INITIAL_STAFF,
   INITIAL_EXPENSES,
+  INITIAL_WARRANTIES,
   uid,
 } from './data/seedData';
 import { exportBothExcelAndJson } from './utils/exportUtils';
@@ -43,11 +45,37 @@ import { TechniciansTab } from './components/TechniciansTab';
 import { StaffTab } from './components/StaffTab';
 import { CustomerCareTab } from './components/CustomerCareTab';
 import { PatientPortalTab } from './components/PatientPortalTab';
+import { WarrantyTab } from './components/WarrantyTab';
 import { EMRDetailModal } from './components/EMRDetailModal';
 import { LoginModal, LoginPage } from './components/LoginModal';
 import { CheckInOutModal } from './components/CheckInOutModal';
 import { ImportModal } from './components/ImportModal';
+import { UpcomingAppointmentToast } from './components/UpcomingAppointmentToast';
+import {
+  UpcomingAppointmentNotice,
+  getUpcomingAppointments,
+  sendNativeBrowserNotification,
+  playHospitalNotificationChime,
+} from './utils/appointmentNotificationManager';
 import { mergeData } from './utils/importUtils';
+
+export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
+  return pts.map((p) => {
+    if (!p.assignedExercises || p.assignedExercises.length === 0) {
+      const bpLower = (p.bodyPart || '').toLowerCase();
+      let defaultExIds: string[] = [];
+      if (bpLower.includes('cổ') || bpLower.includes('vai') || bpLower.includes('gáy')) {
+        defaultExIds = ['EX001', 'EX002', 'EX003'];
+      } else if (bpLower.includes('gối') || bpLower.includes('chân')) {
+        defaultExIds = ['EX007', 'EX008'];
+      } else {
+        defaultExIds = ['EX004', 'EX005', 'EX006'];
+      }
+      return { ...p, assignedExercises: defaultExIds };
+    }
+    return p;
+  });
+};
 
 export default function App() {
   // Persistent or initial state
@@ -57,13 +85,13 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return ensurePatientExercises(parsed);
         }
       } catch {
         // fallback
       }
     }
-    return INITIAL_PATIENTS;
+    return ensurePatientExercises(INITIAL_PATIENTS);
   });
 
   const [treatments, setTreatments] = useState<Treatment[]>(() => {
@@ -106,6 +134,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_TAX_CONFIG;
   });
 
+  const [warranties, setWarranties] = useState<WarrantyRecord[]>(() => {
+    const saved = localStorage.getItem('bp_warranties');
+    return saved ? JSON.parse(saved) : INITIAL_WARRANTIES;
+  });
+
   // Current logged in user (null by default if not logged in or logged out)
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('bp_current_user');
@@ -132,6 +165,66 @@ export default function App() {
   const [isCheckInOutModalOpen, setIsCheckInOutModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // UPCOMING APPOINTMENTS NOTIFICATION STATE (Trong vòng 45 phút tới)
+  const [upcomingNotices, setUpcomingNotices] = useState<UpcomingAppointmentNotice[]>([]);
+  const [dismissedApptNoticeIds, setDismissedApptNoticeIds] = useState<string[]>([]);
+  const [snoozedApptNotices, setSnoozedApptNotices] = useState<Record<string, number>>({});
+  const [forceShowUpcomingAlerts, setForceShowUpcomingAlerts] = useState<boolean>(false);
+  const nativeNotifiedApptIdsRef = useRef<Set<string>>(new Set());
+
+  // Định kỳ quét các lịch hẹn sắp diễn ra trong vòng 45 phút
+  useEffect(() => {
+    const updateUpcoming = () => {
+      const now = new Date();
+      const allUpcoming = getUpcomingAppointments(appointments, now);
+
+      const activeNotices = allUpcoming.filter((item) => {
+        if (!forceShowUpcomingAlerts && dismissedApptNoticeIds.includes(item.appointment.id)) {
+          return false;
+        }
+        const snoozeUntil = snoozedApptNotices[item.appointment.id];
+        if (snoozeUntil && Date.now() < snoozeUntil) {
+          return false;
+        }
+        return true;
+      });
+
+      setUpcomingNotices(activeNotices);
+
+      // Gửi thông báo Native Desktop Notification & chuông cho ca hẹn mới tiến vào cửa sổ 45 phút
+      activeNotices.forEach((item) => {
+        if (!nativeNotifiedApptIdsRef.current.has(item.appointment.id)) {
+          nativeNotifiedApptIdsRef.current.add(item.appointment.id);
+
+          const timeNotice =
+            item.minutesUntil <= 0
+              ? 'đã đến giờ khám'
+              : `trong ${item.minutesUntil} phút nữa (${item.appointment.time})`;
+
+          sendNativeBrowserNotification(
+            `⏰ Lịch hẹn sắp tới: ${item.appointment.patientName}`,
+            {
+              body: `Thời gian: ${timeNotice}. Bác sĩ: ${item.appointment.doctor} - Dịch vụ: ${item.appointment.service}`,
+              tag: `appt-${item.appointment.id}`,
+            },
+            () => {
+              setActiveTab('appointments');
+            }
+          );
+
+          const isMuted = localStorage.getItem('bp_mute_appointment_chime') === 'true';
+          if (!isMuted) {
+            playHospitalNotificationChime();
+          }
+        }
+      });
+    };
+
+    updateUpcoming();
+    const interval = setInterval(updateUpcoming, 15000); // Quét mỗi 15 giây
+    return () => clearInterval(interval);
+  }, [appointments, dismissedApptNoticeIds, snoozedApptNotices, forceShowUpcomingAlerts]);
 
   // Sync state changes to localStorage
   useEffect(() => {
@@ -169,6 +262,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bp_tax_config', JSON.stringify(taxConfig));
   }, [taxConfig]);
+
+  useEffect(() => {
+    localStorage.setItem('bp_warranties', JSON.stringify(warranties));
+  }, [warranties]);
 
   // YÊU CẦU NGƯỜI DÙNG: Xóa hết bệnh nhân, chưa có nhân viên, chỉ có bác sĩ
   useEffect(() => {
@@ -333,14 +430,99 @@ export default function App() {
   };
 
   // Treatment handlers
-  const handleAddTreatment = (treatment: Treatment) => {
+  const handleAddTreatment = (treatment: Treatment, autoCreateAppointment: boolean = true) => {
     setTreatments((prev) => [treatment, ...prev]);
-    showToast(`Đã tạo liệu trình mới: ${treatment.plan} cho bệnh nhân ${treatment.patientName}`);
+
+    const revisitDateVal = treatment.revisitDate || treatment.followup;
+    const matchedPatient = patients.find(
+      (p) => p.id === treatment.patientId || p.name === treatment.patientName
+    );
+
+    // Đồng bộ Ngày Khám Nhắc vào hồ sơ EMR bệnh nhân
+    if (revisitDateVal && (treatment.patientId || treatment.patientName)) {
+      setPatients((prev) =>
+        prev.map((p) => {
+          if (p.id === treatment.patientId || p.name === treatment.patientName) {
+            const updatedPatient = {
+              ...p,
+              nextRevisitDate: revisitDateVal,
+              revisitNotes:
+                treatment.revisitNotes ||
+                `Khám nhắc liệu trình: ${treatment.bodyPart} - ${treatment.plan}`,
+              revisitDoctor: treatment.doctor || p.revisitDoctor || 'BS. CKII Hoàng Minh',
+              revisitCompleted: false,
+            };
+            if (selectedEMRPatient?.id === p.id) {
+              setSelectedEMRPatient(updatedPatient);
+            }
+            return updatedPatient;
+          }
+          return p;
+        })
+      );
+    }
+
+    // Tự động lên lịch hẹn Khám Nhắc (09:00) nếu người dùng bật
+    if (autoCreateAppointment && revisitDateVal) {
+      const apptTime = `${revisitDateVal} 09:00`;
+      const exists = appointments.some(
+        (a) =>
+          (a.patientId === treatment.patientId || a.patientName === treatment.patientName) &&
+          a.time.startsWith(revisitDateVal)
+      );
+
+      if (!exists) {
+        const newAppt: Appointment = {
+          id: uid('LH'),
+          patientId: treatment.patientId || matchedPatient?.id,
+          patientName: treatment.patientName,
+          phone: matchedPatient?.phone || '0901234567',
+          time: apptTime,
+          doctor: treatment.doctor || matchedPatient?.revisitDoctor || 'BS. CKII Hoàng Minh',
+          service: `Khám nhắc liệu trình: ${treatment.bodyPart} (${treatment.plan.slice(0, 30)}...)`,
+          bodyPart: treatment.bodyPart,
+          status: 'Đã đặt',
+          sourceFromEMR: true,
+          emrSourceType: 'followup',
+          emrDate: revisitDateVal,
+        };
+        setAppointments((prev) => [newAppt, ...prev]);
+      }
+    }
+
+    showToast(
+      `Đã sắp xếp liệu trình kèm Ngày Khám Nhắc (${revisitDateVal || 'Chưa đặt'}) cho BN ${treatment.patientName}`
+    );
   };
 
-  const handleUpdateTreatment = (treatment: Treatment) => {
+  const handleUpdateTreatment = (treatment: Treatment, syncPatient: boolean = true) => {
     setTreatments((prev) => prev.map((t) => (t.id === treatment.id ? treatment : t)));
-    showToast('Đã lưu tiến độ liệu trình.');
+
+    const revisitDateVal = treatment.revisitDate || treatment.followup;
+    if (syncPatient && revisitDateVal && (treatment.patientId || treatment.patientName)) {
+      setPatients((prev) =>
+        prev.map((p) => {
+          if (p.id === treatment.patientId || p.name === treatment.patientName) {
+            const updatedPatient = {
+              ...p,
+              nextRevisitDate: revisitDateVal,
+              revisitNotes:
+                treatment.revisitNotes ||
+                `Khám nhắc liệu trình: ${treatment.bodyPart} - ${treatment.plan}`,
+              revisitDoctor: treatment.doctor || p.revisitDoctor || 'BS. CKII Hoàng Minh',
+              revisitCompleted: false,
+            };
+            if (selectedEMRPatient?.id === p.id) {
+              setSelectedEMRPatient(updatedPatient);
+            }
+            return updatedPatient;
+          }
+          return p;
+        })
+      );
+    }
+
+    showToast('Đã lưu tiến độ liệu trình & cập nhật Ngày Khám Nhắc.');
   };
 
   const handleDeleteTreatment = (id: string) => {
@@ -348,11 +530,100 @@ export default function App() {
     showToast('Đã xóa liệu trình.');
   };
 
+  // WARRANTY MANAGEMENT HANDLERS
+  const handleAddWarranty = (w: WarrantyRecord) => {
+    setWarranties((prev) => [w, ...prev]);
+    showToast(`Đã kích hoạt thành công Gói Bảo Hành cho ${w.patientName}!`);
+  };
+
+  const handleUpdateWarranty = (w: WarrantyRecord) => {
+    setWarranties((prev) => prev.map((item) => (item.id === w.id ? w : item)));
+    showToast(`Đã cập nhật hợp đồng bảo hành ${w.id}!`);
+  };
+
+  const handleDeleteWarranty = (id: string) => {
+    setWarranties((prev) => prev.filter((item) => item.id !== id));
+    showToast('Đã xóa hợp đồng bảo hành.');
+  };
+
+  // Transition from completed Treatment to Warranty Package
+  const handleConvertToWarranty = (
+    treatment: Treatment,
+    warranty: WarrantyRecord,
+    autoCreateAppointment: boolean,
+    firstApptDate?: string
+  ) => {
+    // 1. Add warranty record
+    setWarranties((prev) => [warranty, ...prev]);
+
+    // 2. Mark treatment completed and link warranty
+    setTreatments((prev) =>
+      prev.map((t) =>
+        t.id === treatment.id
+          ? {
+              ...t,
+              status: 'Hoàn thành',
+              warrantyId: warranty.id,
+              done: Math.max(t.done, t.total),
+            }
+          : t
+      )
+    );
+
+    // 3. Auto schedule first maintenance session if requested
+    if (autoCreateAppointment && firstApptDate) {
+      const newAppt: Appointment = {
+        id: uid('LH'),
+        patientName: warranty.patientName,
+        patientId: warranty.patientId,
+        phone: warranty.phone,
+        date: firstApptDate,
+        time: '09:00',
+        service: `Bảo dưỡng định kỳ: ${warranty.packageName}`,
+        doctor: warranty.doctor || 'BS. CKII Hoàng Minh',
+        status: 'Đã đặt',
+        notes: `Buổi bảo dưỡng định kỳ lần 1 theo hợp đồng ${warranty.id}. Vùng: ${warranty.bodyPart}`,
+      };
+      setAppointments((prev) => [...prev, newAppt]);
+    }
+
+    showToast(
+      `🎉 Liệu trình đã hoàn thành! Đã kích hoạt Gói Bảo Hành cho khách hàng ${treatment.patientName}.`
+    );
+    setActiveTab('warranty');
+  };
+
   // KEY REQUIREMENT 2: EMR "Add new region" -> automatically adds to Treatments tab
   const handleAutoAddTreatmentFromRegion = (treatment: Treatment) => {
     setTreatments((prev) => [treatment, ...prev]);
+
+    // Đồng bộ Ngày Khám Nhắc sang EMR
+    const revisitDateVal = treatment.revisitDate || treatment.followup;
+    if (revisitDateVal && (treatment.patientId || treatment.patientName)) {
+      setPatients((prev) =>
+        prev.map((p) => {
+          if (p.id === treatment.patientId || p.name === treatment.patientName) {
+            const updatedPatient = {
+              ...p,
+              nextRevisitDate: revisitDateVal,
+              revisitNotes:
+                treatment.revisitNotes ||
+                `Khám nhắc vùng mới: ${treatment.bodyPart} - ${treatment.plan}`,
+              revisitDoctor: treatment.doctor || p.revisitDoctor || 'BS. CKII Hoàng Minh',
+              revisitCompleted: false,
+            };
+            if (selectedEMRPatient?.id === p.id) {
+              setSelectedEMRPatient(updatedPatient);
+            }
+            return updatedPatient;
+          }
+          return p;
+        })
+      );
+    }
+
     showToast(
-      `Đã tự động thêm liệu trình "${treatment.plan}" cho vùng mới vào Quản lý Liệu Trình!`
+      `Đã tự động thêm liệu trình "${treatment.plan}" kèm Ngày Khám Nhắc vào Quản lý Liệu Trình!`
     );
   };
 
@@ -510,6 +781,57 @@ export default function App() {
     handleSwitchRole(user);
   };
 
+  // Handlers for Upcoming Appointment Notifications (45 mins)
+  const handleCheckInFromNotice = (appt: Appointment) => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    const checkInTime = `${hh}:${mm} - ${dd}/${mo}`;
+
+    handleUpdateAppointment({
+      ...appt,
+      status: 'Đang khám',
+      checkInTime,
+    });
+    showToast(`🟢 Đã tiếp đón Check-in cho bệnh nhân ${appt.patientName}!`);
+  };
+
+  const handleOpenEMRFromNotice = (patientId: string) => {
+    const p = patients.find((item) => item.id === patientId || item.phone === patientId);
+    if (p) {
+      setSelectedEMRPatient(p);
+    } else {
+      setActiveTab('appointments');
+    }
+  };
+
+  const handleDismissNotice = (appointmentId: string) => {
+    setDismissedApptNoticeIds((prev) => [...prev, appointmentId]);
+    setForceShowUpcomingAlerts(false);
+  };
+
+  const handleSnoozeNotice = (appointmentId: string, minutes: number = 10) => {
+    setSnoozedApptNotices((prev) => ({
+      ...prev,
+      [appointmentId]: Date.now() + minutes * 60 * 1000,
+    }));
+    showToast(`⏰ Đã hoãn thông báo lịch hẹn trong ${minutes} phút.`);
+  };
+
+  const handleToggleUpcomingAlerts = () => {
+    const allUpcoming = getUpcomingAppointments(appointments, new Date());
+    if (allUpcoming.length === 0) {
+      showToast('Hiện tại không có ca hẹn nào sắp diễn ra trong vòng 45 phút tới.');
+    } else {
+      setDismissedApptNoticeIds([]);
+      setSnoozedApptNotices({});
+      setForceShowUpcomingAlerts(true);
+      showToast(`Có ${allUpcoming.length} ca hẹn khám trong vòng 45 phút tới.`);
+    }
+  };
+
   // Trang Đăng Nhập hiển thị khi chưa đăng nhập hoặc đã đăng xuất
   if (!currentUser) {
     return (
@@ -552,6 +874,8 @@ export default function App() {
           onOpenCheckInOut={() => setIsCheckInOutModalOpen(true)}
           pendingCheckInCount={appointments.filter((a) => a.status === 'Đã đặt').length}
           onLogout={handleLogout}
+          upcomingNoticeCount={upcomingNotices.length}
+          onToggleUpcomingAlerts={handleToggleUpcomingAlerts}
         />
 
         {/* Dynamic View Tab */}
@@ -588,12 +912,48 @@ export default function App() {
               <TreatmentsTab
                 treatments={treatments}
                 patients={patients}
+                staffList={staffList}
+                warranties={warranties}
                 onAddTreatment={handleAddTreatment}
                 onUpdateTreatment={handleUpdateTreatment}
                 onDeleteTreatment={handleDeleteTreatment}
+                onConvertToWarranty={handleConvertToWarranty}
+                onNavigateToWarranty={() => setActiveTab('warranty')}
                 onOpenEMRByPatientId={(pId) => {
                   const p = patients.find((item) => item.id === pId);
                   if (p) setSelectedEMRPatient(p);
+                }}
+              />
+            )}
+
+            {activeTab === 'warranty' && (
+              <WarrantyTab
+                warranties={warranties}
+                patients={patients}
+                staffList={staffList}
+                treatments={treatments}
+                onAddWarranty={handleAddWarranty}
+                onUpdateWarranty={handleUpdateWarranty}
+                onDeleteWarranty={handleDeleteWarranty}
+                onScheduleAppointment={(patientName, service, date, doctor) => {
+                  const targetPt = patients.find(
+                    (p) => p.name.toLowerCase() === patientName.toLowerCase()
+                  );
+                  const newAppt: Appointment = {
+                    id: uid('LH'),
+                    patientName,
+                    patientId: targetPt?.id,
+                    phone: targetPt?.phone || '',
+                    date,
+                    time: '09:00',
+                    service,
+                    doctor: doctor || 'BS. CKII Hoàng Minh',
+                    status: 'Đã đặt',
+                    notes: `Lịch hẹn bảo dưỡng định kỳ phác đồ hậu mãi`,
+                  };
+                  setAppointments((prev) => [...prev, newAppt]);
+                  showToast(`Đã xếp lịch bảo dưỡng cho ${patientName} vào ngày ${date}!`);
+                  setActiveTab('appointments');
                 }}
               />
             )}
@@ -625,8 +985,10 @@ export default function App() {
             {activeTab === 'exercises' && (
               <ExercisesTab
                 exercises={exercises}
+                patients={patients}
                 onAddExercise={handleAddExercise}
                 onDeleteExercise={handleDeleteExercise}
+                onUpdatePatient={handleUpdatePatient}
               />
             )}
 
@@ -674,15 +1036,51 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'patient-portal' && activePortalPatient && (
-              <PatientPortalTab
-                patient={activePortalPatient}
-                treatments={treatments}
-                appointments={appointments}
-                invoices={invoices}
-                exercises={exercises}
-              />
-            )}
+            {(activeTab === 'patient-portal' ||
+              activeTab === 'patient-exercises' ||
+              activeTab === 'patient-warranty') &&
+              activePortalPatient && (
+                <PatientPortalTab
+                  patient={activePortalPatient}
+                  treatments={treatments}
+                  appointments={appointments}
+                  invoices={invoices}
+                  exercises={exercises}
+                  warranties={warranties}
+                  initialTab={
+                    activeTab === 'patient-warranty'
+                      ? 'warranty'
+                      : activeTab === 'patient-exercises'
+                      ? 'exercises'
+                      : 'overview'
+                  }
+                  onSwitchTab={(tab) =>
+                    setActiveTab(
+                      tab === 'warranty'
+                        ? 'patient-warranty'
+                        : tab === 'exercises'
+                        ? 'patient-exercises'
+                        : 'patient-portal'
+                    )
+                  }
+                  onRequestMaintenanceAppt={(patientName, service, date) => {
+                    const newAppt: Appointment = {
+                      id: uid('LH'),
+                      patientName,
+                      patientId: activePortalPatient.id,
+                      phone: activePortalPatient.phone,
+                      date,
+                      time: '09:00',
+                      service,
+                      doctor: 'BS. CKII Hoàng Minh',
+                      status: 'Đã đặt',
+                      notes: `Yêu cầu đặt lịch bảo dưỡng từ cổng bệnh nhân điện tử`,
+                    };
+                    setAppointments((prev) => [...prev, newAppt]);
+                    showToast(`Đã ghi nhận yêu cầu hẹn bảo dưỡng ngày ${date}! Bác sĩ sẽ liên hệ xác nhận.`);
+                  }}
+                />
+              )}
           </div>
         </main>
       </div>
@@ -694,6 +1092,7 @@ export default function App() {
           isOpen={!!selectedEMRPatient}
           onClose={() => setSelectedEMRPatient(null)}
           treatments={treatments}
+          exercises={exercises}
           onAddRegion={(newRegion: BodyRegion, autoTreatment: Treatment) => {
             handleAutoAddTreatmentFromRegion(autoTreatment);
             const updatedPatient: Patient = {
@@ -745,6 +1144,16 @@ export default function App() {
         technicians={technicians}
         onLogin={handleLoginSuccess}
         onClose={() => setIsLoginModalOpen(false)}
+      />
+
+      {/* Floating Upcoming Appointments Toast Notification (Trong vòng 45 phút) */}
+      <UpcomingAppointmentToast
+        upcomingNotices={upcomingNotices}
+        onCheckIn={handleCheckInFromNotice}
+        onOpenEMR={handleOpenEMRFromNotice}
+        onViewAppointmentsTab={() => setActiveTab('appointments')}
+        onDismissNotice={handleDismissNotice}
+        onSnoozeNotice={handleSnoozeNotice}
       />
 
       {/* Floating Toast Notification */}

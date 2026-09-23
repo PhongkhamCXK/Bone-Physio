@@ -43,7 +43,7 @@ export interface Treatment {
   plan: string; // Phác đồ điều trị
   total: number;
   done: number;
-  followup: string; // Ngày tái khám kế tiếp
+  followup: string; // Ngày tái khám kế tiếp / Ngày khám nhắc
   status: 'Đang điều trị' | 'Hoàn thành' | 'Tạm dừng';
   sessions?: SessionSchedule[];
   warrantyStartDate?: string;
@@ -51,6 +51,11 @@ export interface Treatment {
   addedFromEMR?: boolean; // Tự động xuất hiện từ trang EMR của bệnh nhân
   regionId?: string;
   notes?: string;
+  doctor?: string; // Bác sĩ phụ trách / chỉ định khám nhắc
+  revisitDate?: string; // Ngày khám nhắc của Bác sĩ (YYYY-MM-DD)
+  revisitNotes?: string; // Ghi chú chỉ định ngày khám nhắc
+  autoCreateAppointment?: boolean;
+  warrantyId?: string; // ID gói bảo hành được kích hoạt sau khi xong liệu trình
 }
 
 export interface ProtocolTemplate {
@@ -68,9 +73,11 @@ export interface Appointment {
   patientName: string;
   phone: string;
   time: string; // Ngày giờ khám (VD: 2026-09-21 14:30 hoặc 14:30 - Hôm nay)
+  date?: string;
   doctor: string;
   service: string;
   bodyPart?: string;
+  notes?: string;
   status: 'Đã đặt' | 'Đang khám' | 'Hoàn thành';
   sourceFromEMR?: boolean; // Lấy dữ liệu từ EMR bệnh nhân
   emrSourceType?: 'firstVisit' | 'followup' | 'session' | 'manual';
@@ -281,5 +288,42 @@ export interface ChatConversation {
   lastMessage: string;
   lastMessageTime: string;
   messages: ChatMessage[];
+}
+
+export interface WarrantyCheckIn {
+  id: string;
+  date: string; // YYYY-MM-DD
+  sessionNumber: number; // Buổi bảo dưỡng số mấy (1, 2, 3...)
+  doctor: string;
+  painScore?: number; // 0-10
+  romStatus?: string; // Tầm vận động lúc kiểm tra
+  notes: string;
+  proceduresDone?: string[]; // Các bước thực hiện: Nắn chỉnh duy trì, siêu âm bảo dưỡng, kéo giãn...
+}
+
+export interface WarrantyRecord {
+  id: string; // BH001, BH002...
+  treatmentId: string; // ID liệu trình gốc đã hoàn thành
+  patientId: string;
+  patientName: string;
+  phone: string;
+  bodyPart: string;
+  originalPlan: string; // Tên liệu trình gốc (VD: Phác đồ Đau Thần kinh Tọa...)
+  packageName: string; // VD: 'Gói Bảo Hành Tiêu Chuẩn 3 Tháng', 'Gói Bảo Dưỡng Cột Sống VIP 6 Tháng', 'Gói Bảo Hành Toàn Diện 1 Năm'
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  durationMonths: number; // 3, 6, 12...
+  totalMaintenanceSessions: number; // Số buổi bảo dưỡng định kỳ được hưởng (VD: 3, 6, 12)
+  usedMaintenanceSessions: number; // Số buổi đã đến bảo dưỡng
+  status: 'Hiệu lực' | 'Sắp hết hạn' | 'Hết hạn';
+  doctor: string; // Bác sĩ theo dõi bảo hành
+  notes?: string;
+  benefits: string[]; // Danh sách quyền lợi bảo hành
+  checkIns: WarrantyCheckIn[];
+  nextScheduledDate?: string; // Ngày hẹn bảo dưỡng tiếp theo (nếu có)
+  createdAt: string;
+  reminderSentDate?: string; // Ngày đã gửi tin nhắc duy trì bảo hành gần nhất
+  renewalOfferStatus?: 'Chưa liên hệ' | 'Đã nhắc gia hạn' | 'Đã đồng ý gia hạn' | 'Từ chối';
+  renewalNotes?: string;
 }
 

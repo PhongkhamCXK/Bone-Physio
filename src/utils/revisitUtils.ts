@@ -68,30 +68,38 @@ export function getPatientsDueForRevisitInNext3Days(
     // Nếu bệnh nhân đã hoàn thành đợt tái khám này thì bỏ qua
     if (patient.revisitCompleted) return;
 
-    // 1. Kiểm tra ngày hẹn tái khám trực tiếp trong EMR của bệnh nhân
+    // 1. Kiểm tra ngày hẹn tái khám trực tiếp trong EMR của bệnh nhân hoặc từ Liệu trình điều trị
     let targetDateStr = patient.nextRevisitDate || '';
     let notes = patient.revisitNotes || patient.diagnosis || 'Tái khám định kỳ EMR';
     let doctor = patient.revisitDoctor || 'BS. CKII Hoàng Minh';
     let source = 'Hồ sơ EMR bệnh nhân';
 
-    // 2. Nếu EMR chưa có ngày hẹn riêng, tìm trong các liệu trình EMR đang điều trị của bệnh nhân
-    if (!targetDateStr) {
-      const patientTreatments = treatments.filter(
-        (t) =>
-          (t.patientId === patient.id || t.patientName === patient.name) &&
-          t.status === 'Đang điều trị' &&
-          t.followup
-      );
+    // 2. Tìm trong các liệu trình EMR đang điều trị của bệnh nhân (ưu tiên ngày khám nhắc gần nhất của liệu trình)
+    const patientTreatments = treatments.filter(
+      (t) =>
+        (t.patientId === patient.id || t.patientName === patient.name) &&
+        t.status === 'Đang điều trị' &&
+        (t.revisitDate || t.followup)
+    );
 
-      if (patientTreatments.length > 0) {
-        // Lấy ngày tái khám gần nhất
-        patientTreatments.sort((a, b) => {
-          const da = normalizeDate(a.followup)?.getTime() || 0;
-          const db = normalizeDate(b.followup)?.getTime() || 0;
-          return da - db;
-        });
-        targetDateStr = patientTreatments[0].followup;
-        notes = `Tái khám liệu trình: ${patientTreatments[0].plan}`;
+    if (patientTreatments.length > 0) {
+      // Sắp xếp ngày khám nhắc liệu trình gần nhất
+      patientTreatments.sort((a, b) => {
+        const da = normalizeDate(a.revisitDate || a.followup)?.getTime() || 0;
+        const db = normalizeDate(b.revisitDate || b.followup)?.getTime() || 0;
+        return da - db;
+      });
+
+      const bestTreatment = patientTreatments[0];
+      const treatmentRevisitDate = bestTreatment.revisitDate || bestTreatment.followup;
+
+      // Nếu chưa có targetDateStr từ bệnh nhân, hoặc liệu trình có ngày khám nhắc cụ thể
+      if (!targetDateStr || (treatmentRevisitDate && treatmentRevisitDate !== targetDateStr)) {
+        targetDateStr = treatmentRevisitDate;
+        notes =
+          bestTreatment.revisitNotes ||
+          `Khám nhắc liệu trình: ${bestTreatment.plan} (${bestTreatment.bodyPart})`;
+        doctor = bestTreatment.doctor || doctor;
         source = 'Liệu trình điều trị EMR';
       }
     }

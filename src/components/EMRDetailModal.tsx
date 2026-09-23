@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Patient, BodyRegion, Treatment, HealthMetric } from '../types';
+import { Patient, BodyRegion, Treatment, HealthMetric, Exercise } from '../types';
 import { AddRegionModal } from './AddRegionModal';
 import { RevisitReminderConfirmationModal } from './dashboard/RevisitReminderConfirmationModal';
 import { RevisitItem } from '../utils/revisitUtils';
@@ -25,6 +25,7 @@ import {
   Bell,
   MessageSquare,
   Key,
+  Trash2,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
 
@@ -33,6 +34,7 @@ interface EMRDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   treatments: Treatment[];
+  exercises?: Exercise[];
   onAddRegion: (newRegion: BodyRegion, autoTreatment: Treatment) => void;
   onUpdatePatient: (updated: Patient) => void;
   onNavigateToTreatments?: () => void;
@@ -43,12 +45,14 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   isOpen,
   onClose,
   treatments,
+  exercises = [],
   onAddRegion,
   onUpdatePatient,
   onNavigateToTreatments,
 }) => {
   const [isAddRegionOpen, setIsAddRegionOpen] = useState(false);
   const [isAddMetricOpen, setIsAddMetricOpen] = useState(false);
+  const [selectedExToAdd, setSelectedExToAdd] = useState<string>('');
 
   // New metric form state
   const [metricDate, setMetricDate] = useState(
@@ -768,6 +772,106 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                 <p className="text-xs text-slate-400 italic">
                   Chưa có liệu trình nào được gán cho bệnh nhân này.
                 </p>
+              )}
+            </div>
+
+            {/* Prescribed Home Exercises Management */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center">
+                    <Dumbbell className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
+                    Chỉ Định Bài Tập Tự Phục Hồi Tại Nhà Cho Bệnh Nhân ({patient.assignedExercises?.length || 0})
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Bệnh nhân sẽ thấy các bài tập này trên Cổng Bệnh Nhân kèm video và nhật ký tự tập
+                  </p>
+                </div>
+
+                {/* Quick Add Exercise Dropdown */}
+                <div className="flex items-center space-x-2">
+                  <select
+                    value={selectedExToAdd}
+                    onChange={(e) => {
+                      const exId = e.target.value;
+                      if (!exId) return;
+                      const current = patient.assignedExercises || [];
+                      if (!current.includes(exId)) {
+                        onUpdatePatient({
+                          ...patient,
+                          assignedExercises: [...current, exId],
+                        });
+                      }
+                      setSelectedExToAdd('');
+                    }}
+                    className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">+ Chỉ định thêm bài tập...</option>
+                    {exercises.map((ex) => (
+                      <option
+                        key={ex.id}
+                        value={ex.id}
+                        disabled={patient.assignedExercises?.includes(ex.id)}
+                      >
+                        {ex.name} ({ex.bodyPart}) - {patient.assignedExercises?.includes(ex.id) ? 'Đã gán' : ex.setsReps}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* List of assigned exercises */}
+              {patient.assignedExercises && patient.assignedExercises.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {patient.assignedExercises.map((exId) => {
+                    const ex = exercises.find((e) => e.id === exId);
+                    if (!ex) return null;
+                    return (
+                      <div
+                        key={ex.id}
+                        className="bg-white p-3 rounded-xl border border-slate-200 flex items-start justify-between gap-2 shadow-2xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="text-xs font-bold text-slate-900 leading-snug">
+                              {ex.name}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              {ex.bodyPart}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 line-clamp-1">
+                            {ex.description}
+                          </p>
+                          <span className="text-[10px] font-bold text-blue-600 block">
+                            Liều lượng: {ex.setsReps}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedList = (patient.assignedExercises || []).filter(
+                              (id) => id !== ex.id
+                            );
+                            onUpdatePatient({
+                              ...patient,
+                              assignedExercises: updatedList,
+                            });
+                          }}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Hủy chỉ định bài tập này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-3 bg-white rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 italic">
+                  Chưa chỉ định bài tập tự tập tại nhà nào. Bác sĩ hãy chọn bài tập từ danh sách trên để gán cho bệnh nhân.
+                </div>
               )}
             </div>
           </div>

@@ -1,22 +1,27 @@
 import React, { useState } from 'react';
-import { Exercise } from '../types';
-import { Dumbbell, Plus, Search, Video, Play, Trash2, Edit2 } from 'lucide-react';
+import { Exercise, Patient } from '../types';
+import { Dumbbell, Plus, Search, Video, Play, Trash2, Edit2, UserPlus, Check, Users } from 'lucide-react';
 import { uid } from '../data/seedData';
 
 interface ExercisesTabProps {
   exercises: Exercise[];
+  patients?: Patient[];
   onAddExercise: (ex: Exercise) => void;
   onDeleteExercise: (id: string) => void;
+  onUpdatePatient?: (p: Patient) => void;
 }
 
 export const ExercisesTab: React.FC<ExercisesTabProps> = ({
   exercises,
+  patients = [],
   onAddExercise,
   onDeleteExercise,
+  onUpdatePatient,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedBodyPart, setSelectedBodyPart] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [assignedSuccessMsg, setAssignedSuccessMsg] = useState<string | null>(null);
 
   // Form
   const [name, setName] = useState('');
@@ -24,6 +29,23 @@ export const ExercisesTab: React.FC<ExercisesTabProps> = ({
   const [description, setDescription] = useState('');
   const [setsReps, setSetsReps] = useState('10 lần x 3 hiệp');
   const [videoUrl, setVideoUrl] = useState('');
+
+  const handleAssignToPatient = (exerciseId: string, patientId: string) => {
+    if (!onUpdatePatient || !patientId) return;
+    const targetPatient = patients.find((p) => p.id === patientId);
+    if (!targetPatient) return;
+
+    const currentList = targetPatient.assignedExercises || [];
+    if (!currentList.includes(exerciseId)) {
+      const updated: Patient = {
+        ...targetPatient,
+        assignedExercises: [...currentList, exerciseId],
+      };
+      onUpdatePatient(updated);
+      setAssignedSuccessMsg(`Đã chỉ định bài tập cho bệnh nhân ${targetPatient.name}!`);
+      setTimeout(() => setAssignedSuccessMsg(null), 3000);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,6 +168,34 @@ export const ExercisesTab: React.FC<ExercisesTabProps> = ({
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs font-semibold text-slate-700">
                 Hiệp / Lần: <span className="text-blue-600">{ex.setsReps}</span>
               </div>
+
+              {/* Assign to patient quick action */}
+              {patients.length > 0 && onUpdatePatient && (
+                <div className="pt-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                    Chỉ định cho bệnh nhân:
+                  </label>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleAssignToPatient(ex.id, e.target.value);
+                      }
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-100/70 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">+ Chọn bệnh nhân để gán...</option>
+                    {patients.map((p) => {
+                      const isAssigned = (p.assignedExercises || []).includes(ex.id);
+                      return (
+                        <option key={p.id} value={p.id} disabled={isAssigned}>
+                          {p.name} ({p.bodyPart}) {isAssigned ? '✓ Đã gán' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
@@ -168,6 +218,14 @@ export const ExercisesTab: React.FC<ExercisesTabProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Success alert */}
+      {assignedSuccessMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-5">
+          <Check className="w-4 h-4" />
+          <span>{assignedSuccessMsg}</span>
+        </div>
+      )}
 
       {/* Modal Add Exercise */}
       {isModalOpen && (

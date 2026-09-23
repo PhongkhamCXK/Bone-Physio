@@ -14,6 +14,7 @@ import {
   MessageSquare,
   LogOut,
   X,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -42,26 +43,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'EMR & Liệu Trình Của Tôi',
           icon: FileText,
         },
+        {
+          id: 'patient-exercises',
+          label: 'Bài Tập Tại Nhà',
+          icon: Dumbbell,
+        },
+        {
+          id: 'patient-warranty',
+          label: 'Gói Bảo Hành & Bảo Dưỡng',
+          icon: ShieldCheck,
+        },
       ];
     }
     if (currentUser.role === 'accountant') {
       return [
         { id: 'billing', label: 'Kế Toán, Thu Chi & Thuế', icon: CreditCard },
+        { id: 'warranty', label: 'Hợp Đồng Bảo Hành', icon: ShieldCheck },
       ];
     }
     if (currentUser.role === 'care') {
       return [
         { id: 'care', label: 'Chăm Sóc & Chat Trực Tuyến', icon: MessageSquare },
         { id: 'appointments', label: 'Lịch Hẹn Khám (Từ EMR)', icon: Calendar },
+        { id: 'warranty', label: 'Bảo Hành & Bảo Dưỡng', icon: ShieldCheck },
       ];
     }
     if (currentUser.role === 'sales') {
-      return [{ id: 'patients', label: 'Bệnh Nhân & EMR', icon: Users }];
+      return [
+        { id: 'patients', label: 'Bệnh Nhân & EMR', icon: Users },
+        { id: 'warranty', label: 'Bảo Hành & Hậu Mãi', icon: ShieldCheck },
+      ];
     }
     if (currentUser.role === 'technician') {
       return [
         { id: 'technicians', label: 'Kỹ Thuật Viên & Tour', icon: UserCheck },
         { id: 'treatments', label: 'Liệu Trình Điều Trị', icon: Layers },
+        { id: 'warranty', label: 'Bảo Dưỡng Định Kỳ', icon: ShieldCheck },
       ];
     }
     // Admin (Full permissions)
@@ -71,6 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'patients', label: 'Bệnh Nhân & EMR', icon: Users },
       { id: 'bodymap', label: 'Sơ Đồ Cột Sống & Khớp Gối', icon: Activity },
       { id: 'treatments', label: 'Quản Lý Liệu Trình', icon: Layers },
+      { id: 'warranty', label: 'Bảo Hành & Bảo Dưỡng', icon: ShieldCheck },
       { id: 'care', label: 'Chăm Sóc & Chat Trực Tuyến', icon: MessageSquare },
       { id: 'exercises', label: 'Bài Tập Tại Nhà', icon: Dumbbell },
       { id: 'billing', label: 'Kế Toán, Thu Chi & Thuế', icon: CreditCard },

@@ -127,7 +127,16 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
         revisitNotes: revisitNotes || undefined,
         dietPlan: STANDARD_DIET_PLAN,
         healthMetrics: [],
-        assignedExercises: [],
+        assignedExercises: (() => {
+          const bpLower = (bodyPart || '').toLowerCase();
+          if (bpLower.includes('cổ') || bpLower.includes('vai')) {
+            return ['EX001', 'EX002', 'EX003'];
+          }
+          if (bpLower.includes('gối') || bpLower.includes('chân')) {
+            return ['EX007', 'EX008'];
+          }
+          return ['EX004', 'EX005', 'EX006'];
+        })(),
         additionalRegions: [],
       };
       onAddPatient(newPatient);

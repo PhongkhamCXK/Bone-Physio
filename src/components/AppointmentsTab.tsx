@@ -20,6 +20,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
+import { getAppointmentMinutesUntil } from '../utils/appointmentNotificationManager';
 
 interface AppointmentsTabProps {
   appointments: Appointment[];
@@ -177,7 +178,22 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
       a.phone.includes(search) ||
       a.service.toLowerCase().includes(search.toLowerCase()) ||
       a.doctor.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || a.status === statusFilter;
+
+    const minutesUntil = getAppointmentMinutesUntil(a);
+    const isUpcoming45 =
+      a.status === 'Đã đặt' &&
+      !a.checkInTime &&
+      minutesUntil !== null &&
+      minutesUntil >= -15 &&
+      minutesUntil <= 45;
+
+    const matchStatus =
+      statusFilter === 'all'
+        ? true
+        : statusFilter === 'upcoming45'
+        ? isUpcoming45
+        : a.status === statusFilter;
+
     const matchSource =
       sourceFilter === 'all'
         ? true
@@ -190,6 +206,11 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
   const pendingCount = appointments.filter((a) => a.status === 'Đã đặt').length;
   const inProgressCount = appointments.filter((a) => a.status === 'Đang khám').length;
   const completedCount = appointments.filter((a) => a.status === 'Hoàn thành').length;
+  const upcoming45Count = appointments.filter((a) => {
+    if (a.status !== 'Đã đặt' || a.checkInTime) return false;
+    const m = getAppointmentMinutesUntil(a);
+    return m !== null && m >= -15 && m <= 45;
+  }).length;
 
   return (
     <div className="space-y-6">
@@ -246,10 +267,28 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
       </div>
 
       {/* Quick stats cards for reception check-in/out */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
           <span className="text-xs text-slate-500 block">Tổng số lịch hẹn</span>
           <span className="text-xl font-extrabold text-slate-900">{appointments.length}</span>
+        </div>
+        <div
+          onClick={() => setStatusFilter(statusFilter === 'upcoming45' ? 'all' : 'upcoming45')}
+          className={`p-4 rounded-2xl border shadow-xs cursor-pointer transition ${
+            statusFilter === 'upcoming45'
+              ? 'bg-amber-100/95 border-amber-400 ring-2 ring-amber-400/50'
+              : 'bg-amber-50/80 border-amber-200/80 hover:bg-amber-100/80'
+          }`}
+          title="Bấm để lọc các ca hẹn sắp diễn ra trong vòng 45 phút tới"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-800 flex items-center space-x-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+              <span>Sắp khám (≤45p)</span>
+            </span>
+            <Clock className="w-4 h-4 text-amber-600" />
+          </div>
+          <span className="text-xl font-extrabold text-amber-900 block mt-1">{upcoming45Count}</span>
         </div>
         <div
           onClick={() => setStatusFilter('Đã đặt')}
@@ -257,7 +296,7 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
           title="Bấm để lọc danh sách chờ Check-in"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-700">Chờ Check-in (Vào khám)</span>
+            <span className="text-xs font-bold text-amber-700">Chờ Check-in</span>
             <LogIn className="w-4 h-4 text-amber-600" />
           </div>
           <span className="text-xl font-extrabold text-amber-800 block mt-1">{pendingCount}</span>
@@ -268,7 +307,7 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
           title="Bấm để lọc danh sách đang khám"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-700">Đang khám (Đã Check-in)</span>
+            <span className="text-xs font-bold text-emerald-700">Đang khám</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <span className="text-xl font-extrabold text-emerald-800 block mt-1">{inProgressCount}</span>
@@ -279,7 +318,7 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
           title="Bấm để lọc danh sách đã hoàn thành"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-700">Đã Check-out (Hoàn tất)</span>
+            <span className="text-xs font-bold text-blue-700">Đã Check-out</span>
             <LogOut className="w-4 h-4 text-blue-600" />
           </div>
           <span className="text-xl font-extrabold text-blue-800 block mt-1">{completedCount}</span>
@@ -324,6 +363,7 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tất cả trạng thái</option>
+            <option value="upcoming45">⏰ Sắp diễn ra trong 45 phút ({upcoming45Count})</option>
             <option value="Đã đặt">Chờ Check-in (Đã đặt)</option>
             <option value="Đang khám">Đang khám (Đã Check-in)</option>
             <option value="Hoàn thành">Đã Check-out (Hoàn thành)</option>
@@ -394,6 +434,24 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
                         <Clock className="w-3.5 h-3.5 text-blue-600" />
                         <span>{appt.time}</span>
                       </div>
+                      {(() => {
+                        const m = getAppointmentMinutesUntil(appt);
+                        if (
+                          appt.status === 'Đã đặt' &&
+                          !appt.checkInTime &&
+                          m !== null &&
+                          m >= -15 &&
+                          m <= 45
+                        ) {
+                          return (
+                            <span className="inline-flex items-center space-x-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                              <span>⏰</span>
+                              <span>{m <= 0 ? 'Đến giờ khám' : `Còn ${m} phút`}</span>
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </td>
 
                     <td className="py-4 px-5 text-slate-700 font-medium">
@@ -587,9 +645,44 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Ngày Giờ Khám (Lấy từ EMR hoặc nhập mới)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Ngày Giờ Khám (Lấy từ EMR hoặc nhập mới)
+                  </label>
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date(Date.now() + 20 * 60 * 1000);
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const hh = String(d.getHours()).padStart(2, '0');
+                        const min = String(d.getMinutes()).padStart(2, '0');
+                        setTime(`${yyyy}-${mm}-${dd} ${hh}:${min}`);
+                      }}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold transition shadow-2xs"
+                      title="Đặt giờ hẹn sau 20 phút nữa để thử thông báo Toast 45 phút"
+                    >
+                      +20 phút (Thử Toast)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date(Date.now() + 35 * 60 * 1000);
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const hh = String(d.getHours()).padStart(2, '0');
+                        const min = String(d.getMinutes()).padStart(2, '0');
+                        setTime(`${yyyy}-${mm}-${dd} ${hh}:${min}`);
+                      }}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition"
+                    >
+                      +35 phút
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="text"
                   required
