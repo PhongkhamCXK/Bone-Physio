@@ -44,7 +44,7 @@ import { StaffTab } from './components/StaffTab';
 import { CustomerCareTab } from './components/CustomerCareTab';
 import { PatientPortalTab } from './components/PatientPortalTab';
 import { EMRDetailModal } from './components/EMRDetailModal';
-import { LoginModal } from './components/LoginModal';
+import { LoginModal, LoginPage } from './components/LoginModal';
 import { CheckInOutModal } from './components/CheckInOutModal';
 import { ImportModal } from './components/ImportModal';
 import { mergeData } from './utils/importUtils';
@@ -106,12 +106,20 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_TAX_CONFIG;
   });
 
-  // Current logged in user
-  const [currentUser, setCurrentUser] = useState<AppUser>({
-    role: 'admin',
-    id: 'admin',
-    name: 'BS. CKII Hoàng Minh',
-    title: 'Bác sĩ Trưởng Khoa / Quản trị viên',
+  // Current logged in user (null by default if not logged in or logged out)
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    const saved = localStorage.getItem('bp_current_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.role && parsed.name) {
+          return parsed;
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return null;
   });
 
   // Active view tab
@@ -224,6 +232,7 @@ export default function App() {
   // Switch active tab based on role automatically if needed
   const handleSwitchRole = (user: AppUser) => {
     setCurrentUser(user);
+    localStorage.setItem('bp_current_user', JSON.stringify(user));
     if (user.role === 'patient') {
       setActiveTab('patient-portal');
     } else if (user.role === 'accountant') {
@@ -490,13 +499,29 @@ export default function App() {
 
   // Logout handler
   const handleLogout = () => {
-    setIsLoginModalOpen(true);
+    localStorage.removeItem('bp_current_user');
+    setCurrentUser(null);
+    setIsLoginModalOpen(false);
+    showToast('Đã đăng xuất khỏi hệ thống thành công.');
   };
 
   const handleLoginSuccess = (user: AppUser) => {
     setIsLoginModalOpen(false);
     handleSwitchRole(user);
   };
+
+  // Trang Đăng Nhập hiển thị khi chưa đăng nhập hoặc đã đăng xuất
+  if (!currentUser) {
+    return (
+      <LoginPage
+        patients={patients}
+        staffList={staffList}
+        technicians={technicians}
+        onLogin={handleLoginSuccess}
+        toastMessage={toastMessage}
+      />
+    );
+  }
 
   // Current Patient for Patient Portal
   const activePortalPatient =
@@ -526,6 +551,7 @@ export default function App() {
           patients={patients}
           onOpenCheckInOut={() => setIsCheckInOutModalOpen(true)}
           pendingCheckInCount={appointments.filter((a) => a.status === 'Đã đặt').length}
+          onLogout={handleLogout}
         />
 
         {/* Dynamic View Tab */}
@@ -718,6 +744,7 @@ export default function App() {
         staffList={staffList}
         technicians={technicians}
         onLogin={handleLoginSuccess}
+        onClose={() => setIsLoginModalOpen(false)}
       />
 
       {/* Floating Toast Notification */}

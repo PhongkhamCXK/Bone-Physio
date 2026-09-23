@@ -32,7 +32,7 @@ import {
 interface RevisitReminderConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  revisitItem: RevisitItem | null;
+  revisitItem?: RevisitItem | null;
   bulkItems?: RevisitItem[]; // Tùy chọn nếu gửi hàng loạt nhiều bệnh nhân
   onUpdatePatient?: (updatedPatient: Patient) => void;
   onOpenEMR?: (patient: Patient) => void;

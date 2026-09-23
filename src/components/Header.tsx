@@ -12,6 +12,7 @@ import {
   Upload,
   Clock,
   RefreshCw,
+  LogOut,
 } from 'lucide-react';
 import { getTimeRemainingUntilNextExport, isAutoExportEnabled } from '../utils/autoBackupManager';
 
@@ -25,6 +26,7 @@ interface HeaderProps {
   patients: Patient[];
   onOpenCheckInOut?: () => void;
   pendingCheckInCount?: number;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   patients,
   onOpenCheckInOut,
   pendingCheckInCount = 0,
+  onLogout,
 }) => {
   const titles: Record<string, { title: string; subtitle: string }> = {
     dashboard: {
@@ -237,6 +240,18 @@ export const Header: React.FC<HeaderProps> = ({
           <Bell className="w-4 h-4" />
           <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white absolute top-2 right-2"></span>
         </button>
+
+        {/* Đăng xuất / Thoát tài khoản */}
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="w-9 h-9 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center transition"
+            title="Đăng xuất khỏi hệ thống"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </header>
   );
