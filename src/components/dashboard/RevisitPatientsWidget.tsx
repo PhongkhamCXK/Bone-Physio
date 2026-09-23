@@ -889,7 +889,7 @@ export const RevisitPatientsWidget: React.FC<RevisitPatientsWidgetProps> = ({
 
       {/* Modal Gửi Thông Báo Tái Khám Từng Bệnh Nhân */}
       {reminderTargetItem && (
-        <SendRevisitReminderModal
+        <RevisitReminderConfirmationModal
           revisitItem={reminderTargetItem}
           isOpen={!!reminderTargetItem}
           onClose={() => setReminderTargetItem(null)}
@@ -899,12 +899,20 @@ export const RevisitPatientsWidget: React.FC<RevisitPatientsWidgetProps> = ({
       )}
 
       {/* Modal Gửi Thông Báo Hàng Loạt Cho Các Ca Quá Hạn */}
-      <BulkSendRevisitModal
-        overdueItems={revisitItems.filter((i) => i.daysRemaining < 0)}
-        isOpen={isBulkModalOpen}
-        onClose={() => setIsBulkModalOpen(false)}
-        onUpdatePatient={onUpdatePatient}
-        onSuccessToast={onShowToast}
+      {isBulkModalOpen && (
+        <RevisitReminderConfirmationModal
+          bulkItems={revisitItems.filter((i) => i.daysRemaining < 0)}
+          isOpen={isBulkModalOpen}
+          onClose={() => setIsBulkModalOpen(false)}
+          onUpdatePatient={onUpdatePatient}
+          onSuccessToast={onShowToast}
+        />
+      )}
+
+      {/* Modal Cấu Hình API Tin Nhắn & Push */}
+      <MessagingApiSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );
