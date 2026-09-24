@@ -93,6 +93,15 @@ export function recordBackupHistory(item: Omit<BackupHistoryItem, 'id'>): void {
 }
 
 /**
+ * QUY TẮC CỐT LÕI THEO YÊU CẦU:
+ * Chỉ tự động tải về 2 file (Excel + JSON) khi tài khoản ADMIN đã đăng nhập.
+ * Bác sĩ, kỹ thuật viên, lễ tân hay khi chưa đăng nhập sẽ KHÔNG tự động tải file.
+ */
+export function canExecuteAutoBackup(userRole?: string): boolean {
+  return userRole === 'admin';
+}
+
+/**
  * Thực hiện xuất tự động 2 file: 1 Excel (.xlsx) + 1 JSON (.json)
  * Tên file theo đúng quy định: ngày-tháng-năm-giờ
  */

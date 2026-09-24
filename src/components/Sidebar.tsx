@@ -15,6 +15,7 @@ import {
   LogOut,
   X,
   ShieldCheck,
+  Database,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -94,6 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'billing', label: 'Kế Toán, Thu Chi & Thuế', icon: CreditCard },
       { id: 'technicians', label: 'Kỹ Thuật Viên', icon: UserCheck },
       { id: 'staff', label: 'Quản Lý Nhân Sự', icon: Shield },
+      { id: 'master-data', label: 'Bể Nguồn Data Chung', icon: Database },
     ];
   };
 
@@ -118,9 +120,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Logo & Brand */}
           <div className="h-18 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 font-bold text-lg">
-                BP
-              </div>
+              <img
+                src="/favicon.svg"
+                alt="Bone Physio Logo"
+                className="w-10 h-10 rounded-2xl shadow-lg shadow-blue-500/30 object-contain"
+              />
               <div>
                 <span className="text-white font-black tracking-wide text-base block">
                   Bone Physio

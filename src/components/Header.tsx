@@ -102,6 +102,10 @@ export const Header: React.FC<HeaderProps> = ({
       title: 'Thẻ Bảo Hành & Quyền Lợi Bảo Dưỡng Của Tôi',
       subtitle: 'Chứng nhận bảo hành điện tử chính thức và số buổi bảo dưỡng định kỳ miễn phí',
     },
+    'master-data': {
+      title: 'Bể Nguồn Data Chung (Master Data Pool)',
+      subtitle: 'Trung tâm quản lý, đồng bộ và sao lưu toàn bộ cơ sở dữ liệu phòng khám',
+    },
   };
 
   const currentMeta = titles[activeTab] || {
@@ -214,7 +218,9 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>Tự động xuất 24h:</span>
           <span className="font-bold text-emerald-900">
-            {getTimeRemainingUntilNextExport().formatted}
+            {currentUser.role === 'admin'
+              ? getTimeRemainingUntilNextExport().formatted
+              : 'Admin đăng nhập mới tải'}
           </span>
         </div>
 

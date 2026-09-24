@@ -46,6 +46,7 @@ import { StaffTab } from './components/StaffTab';
 import { CustomerCareTab } from './components/CustomerCareTab';
 import { PatientPortalTab } from './components/PatientPortalTab';
 import { WarrantyTab } from './components/WarrantyTab';
+import { MasterDataPoolTab } from './components/MasterDataPoolTab';
 import { EMRDetailModal } from './components/EMRDetailModal';
 import { LoginModal, LoginPage } from './components/LoginModal';
 import { CheckInOutModal } from './components/CheckInOutModal';
@@ -139,7 +140,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_WARRANTIES;
   });
 
-  // Current logged in user (null by default if not logged in or logged out)
+  // Current logged in user (null by default - Yêu cầu: Không tự động đăng nhập, người dùng tự đăng nhập)
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('bp_current_user');
     if (saved) {
@@ -267,23 +268,29 @@ export default function App() {
     localStorage.setItem('bp_warranties', JSON.stringify(warranties));
   }, [warranties]);
 
-  // YÊU CẦU NGƯỜI DÙNG: Xóa hết bệnh nhân, chưa có nhân viên, chỉ có bác sĩ
+  // YÊU CẦU NGƯỜI DÙNG: Không tự động đăng nhập, xóa phiên lưu để người dùng tự đăng nhập tay
   useEffect(() => {
-    const CLEAN_VERSION = 'v6_clean_doctors_only_zero_patients';
+    const CLEAN_VERSION = 'v8_manual_login_only';
     const savedVer = localStorage.getItem('bp_clean_version');
     if (savedVer !== CLEAN_VERSION) {
       setPatients([]);
       setTreatments([]);
       setAppointments([]);
       setTechnicians([]);
-      setStaffList(INITIAL_STAFF); // Chỉ có bác sĩ
+      setStaffList(INITIAL_STAFF); // Bác sĩ phụ trách chuyên môn
       setInvoices([]);
+      setExpenses([]);
+      setWarranties([]);
+      setCurrentUser(null);
+      localStorage.removeItem('bp_current_user');
       localStorage.setItem('bp_patients', JSON.stringify([]));
       localStorage.setItem('bp_treatments', JSON.stringify([]));
       localStorage.setItem('bp_appointments', JSON.stringify([]));
       localStorage.setItem('bp_technicians', JSON.stringify([]));
       localStorage.setItem('bp_staff', JSON.stringify(INITIAL_STAFF));
       localStorage.setItem('bp_invoices', JSON.stringify([]));
+      localStorage.setItem('bp_expenses', JSON.stringify([]));
+      localStorage.setItem('bp_warranties', JSON.stringify([]));
       localStorage.setItem('bp_clean_version', CLEAN_VERSION);
     }
   }, []);
@@ -297,8 +304,14 @@ export default function App() {
   };
 
   // 24H AUTOMATED EXPORT ENGINE (EXCEL + JSON CỨ SAU MỖI 24H VỚI TÊN NGÀY-THÁNG-NĂM-GIỜ)
+  // YÊU CẦU CỐT LÕI: "chỉ tự động tải về khi admin đã đăng nhập"
   useEffect(() => {
     const checkAndRunAutoBackup = () => {
+      // BẮT BUỘC: Chỉ tải về khi tài khoản có quyền Admin đã đăng nhập
+      if (currentUser?.role !== 'admin') {
+        return;
+      }
+
       if (isAutoExportDue()) {
         try {
           const res = executeAuto24hBackup({
@@ -306,11 +319,14 @@ export default function App() {
             treatments,
             appointments,
             invoices,
+            expenses,
+            taxConfig,
             technicians,
             exercises,
+            staffList,
           });
           showToast(
-            `🔄 Tự động xuất 2 File sao lưu 24h: ${res.excelFileName} và ${res.jsonFileName}`
+            `🔄 [Admin] Tự động xuất 2 File sao lưu 24h: ${res.excelFileName} và ${res.jsonFileName}`
           );
         } catch (err) {
           console.error('Lỗi khi tự động xuất file 24h:', err);
@@ -318,13 +334,13 @@ export default function App() {
       }
     };
 
-    // Kiểm tra ngay khi mở ứng dụng
+    // Kiểm tra ngay khi mở ứng dụng hoặc khi tài khoản thay đổi
     checkAndRunAutoBackup();
 
     // Định kỳ kiểm tra mỗi 60 giây
     const interval = setInterval(checkAndRunAutoBackup, 60000);
     return () => clearInterval(interval);
-  }, [patients, treatments, appointments, invoices, technicians, exercises]);
+  }, [currentUser, patients, treatments, appointments, invoices, expenses, taxConfig, technicians, exercises, staffList]);
 
   // Switch active tab based on role automatically if needed
   const handleSwitchRole = (user: AppUser) => {
@@ -1033,6 +1049,33 @@ export default function App() {
                 staffList={staffList}
                 onAddStaff={handleAddStaff}
                 onDeleteStaff={handleDeleteStaff}
+              />
+            )}
+
+            {activeTab === 'master-data' && (
+              <MasterDataPoolTab
+                currentUser={currentUser}
+                patients={patients}
+                setPatients={setPatients}
+                treatments={treatments}
+                setTreatments={setTreatments}
+                appointments={appointments}
+                setAppointments={setAppointments}
+                invoices={invoices}
+                setInvoices={setInvoices}
+                technicians={technicians}
+                setTechnicians={setTechnicians}
+                staffList={staffList}
+                setStaffList={setStaffList}
+                exercises={exercises}
+                setExercises={setExercises}
+                expenses={expenses}
+                setExpenses={setExpenses}
+                taxConfig={taxConfig}
+                setTaxConfig={setTaxConfig}
+                warranties={warranties}
+                setWarranties={setWarranties}
+                showToast={showToast}
               />
             )}
 
