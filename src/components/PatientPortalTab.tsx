@@ -38,7 +38,11 @@ import {
   HeartPulse,
   Printer,
   CalendarClock,
+  ListTodo,
+  Upload,
 } from 'lucide-react';
+import { PatientAvatar, AGE_CATEGORY_MAP, getCategoryByAge, ALL_AVATAR_PRESETS } from './PatientAvatar';
+import { PatientDailyChecklist } from './PatientDailyChecklist';
 
 interface PatientPortalTabProps {
   patient: Patient;
@@ -47,9 +51,10 @@ interface PatientPortalTabProps {
   invoices: Invoice[];
   exercises: Exercise[];
   warranties?: WarrantyRecord[];
-  initialTab?: 'overview' | 'exercises' | 'warranty';
-  onSwitchTab?: (tab: 'overview' | 'exercises' | 'warranty') => void;
+  initialTab?: 'overview' | 'exercises' | 'warranty' | 'checklist';
+  onSwitchTab?: (tab: 'overview' | 'exercises' | 'warranty' | 'checklist') => void;
   onRequestMaintenanceAppt?: (patientName: string, service: string, date: string) => void;
+  onUpdatePatient?: (updated: Patient) => void;
 }
 
 const CHAT_STORAGE_KEY = 'bone_physio_chat_conversations';
@@ -64,8 +69,40 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   initialTab = 'overview',
   onSwitchTab,
   onRequestMaintenanceAppt,
+  onUpdatePatient,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'exercises' | 'warranty'>(initialTab);
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'exercises' | 'warranty' | 'checklist'>(initialTab);
+  const [patientData, setPatientData] = useState<Patient>(patient);
+  const [showAvatarPickerModal, setShowAvatarPickerModal] = useState(false);
+
+  useEffect(() => {
+    setPatientData(patient);
+  }, [patient]);
+
+  const handleToggleChecklistTask = (taskId: string) => {
+    const currentTasks = patientData.dailyChecklist || [];
+    const updatedTasks = currentTasks.map((t) =>
+      t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t
+    );
+    const updatedPatient: Patient = {
+      ...patientData,
+      dailyChecklist: updatedTasks,
+    };
+    setPatientData(updatedPatient);
+    try {
+      const raw = localStorage.getItem('bp_patients');
+      if (raw) {
+        const list = JSON.parse(raw);
+        const nextList = list.map((p: Patient) => (p.id === patient.id ? updatedPatient : p));
+        localStorage.setItem('bp_patients', JSON.stringify(nextList));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    if (onUpdatePatient) {
+      onUpdatePatient(updatedPatient);
+    }
+  };
 
   useEffect(() => {
     if (initialTab) {
@@ -266,112 +303,260 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   // List of exercises to display depending on filter
   const displayedExercises = exerciseFilter === 'assigned' ? assignedExs : exercises;
 
-  return (
-    <div className="space-y-6">
-      {/* Welcome banner */}
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div>
-          <span className="px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-xs font-semibold uppercase tracking-wider text-blue-100">
-            Cổng Tra Cứu EMR & Hướng Dẫn Tự Tập Tại Nhà
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold mt-2">
-            Xin chào, {patient.name}
-          </h2>
-          <p className="text-blue-100 text-xs sm:text-sm mt-1">
-            Mã bệnh nhân: <strong className="font-mono bg-white/20 px-2 py-0.5 rounded">{patient.id}</strong> • Chẩn đoán: <strong>{patient.diagnosis}</strong>
-          </p>
+    const checklist = patientData.dailyChecklist || [];
+    const completedChecklistCount = checklist.filter((i) => i.isCompleted).length;
+    const totalChecklistCount = checklist.length || 4;
+
+    const categoryInfo = (patientData.avatarType && AGE_CATEGORY_MAP[patientData.avatarType])
+      ? AGE_CATEGORY_MAP[patientData.avatarType]
+      : getCategoryByAge(patientData.age, patientData.gender);
+
+    return (
+      <div className="space-y-6">
+        {/* Welcome banner */}
+        <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="flex items-center gap-4 sm:gap-5">
+            <div className="relative group flex-shrink-0">
+              <PatientAvatar
+                avatarUrl={patientData.avatar}
+                avatarType={patientData.avatarType}
+                name={patientData.name}
+                age={patientData.age}
+                gender={patientData.gender}
+                size="2xl"
+                showBadge
+                className="ring-4 ring-white/30 shadow-2xl flex-shrink-0"
+              />
+              <div className="absolute -bottom-2 -right-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarPickerModal(true)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-full shadow-lg border-2 border-white transition transform hover:scale-110"
+                  title="Chọn từ 10 hình minh họa gốc"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
+                <label
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-full shadow-lg cursor-pointer border-2 border-white transition transform hover:scale-110"
+                  title="Tải ảnh đại diện từ máy"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          if (ev.target?.result) {
+                            const updated = {
+                              ...patientData,
+                              avatar: ev.target.result as string,
+                            };
+                            setPatientData(updated);
+                            if (onUpdatePatient) onUpdatePatient(updated);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-xs font-semibold uppercase tracking-wider text-blue-100">
+                  Cổng Tra Cứu EMR & Hướng Dẫn Tự Tập Tại Nhà
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400/25 border border-amber-300/40 text-amber-200">
+                  {categoryInfo.badgeEmoji} {categoryInfo.categoryTitle} ({categoryInfo.ageGroup})
+                </span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold mt-1.5">
+                Xin chào, {patientData.name}
+              </h2>
+              <p className="text-blue-100 text-xs sm:text-sm mt-1">
+                Mã bệnh nhân: <strong className="font-mono bg-white/20 px-2 py-0.5 rounded">{patientData.id}</strong> • {patientData.age} tuổi • Chẩn đoán: <strong>{patientData.diagnosis}</strong>
+              </p>
+              <p className="text-amber-200/90 text-xs mt-1 italic hidden sm:block">
+                🎯 {categoryInfo.description}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 text-center min-w-[120px]">
+              <span className="text-xs text-blue-100">Tiến độ liệu trình</span>
+              <h3 className="text-2xl sm:text-3xl font-black mt-0.5">{progressPercent}%</h3>
+            </div>
+            <div
+              onClick={() => {
+                setActiveSubTab('checklist');
+                if (onSwitchTab) onSwitchTab('checklist');
+              }}
+              className="bg-emerald-500/25 hover:bg-emerald-500/35 cursor-pointer backdrop-blur-md p-4 rounded-2xl border border-emerald-300/40 text-center min-w-[130px] transition"
+              title="Bấm để xem việc cần làm hôm nay"
+            >
+              <span className="text-xs text-emerald-200 flex items-center justify-center space-x-1 font-bold">
+                <ListTodo className="w-3.5 h-3.5" />
+                <span>Việc cần làm</span>
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-black text-emerald-300 mt-0.5">
+                {completedChecklistCount}/{totalChecklistCount}
+              </h3>
+            </div>
+            <div
+              onClick={() => {
+                setActiveSubTab('exercises');
+                if (onSwitchTab) onSwitchTab('exercises');
+              }}
+              className="bg-amber-500/20 hover:bg-amber-500/30 cursor-pointer backdrop-blur-md p-4 rounded-2xl border border-amber-300/30 text-center min-w-[120px] transition"
+              title="Bấm để xem bài tập hôm nay"
+            >
+              <span className="text-xs text-amber-200 flex items-center justify-center space-x-1">
+                <Dumbbell className="w-3.5 h-3.5" />
+                <span>Bài tập</span>
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-black text-amber-300 mt-0.5">
+                {completedExIds.length}/{assignedExs.length}
+              </h3>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 text-center min-w-[140px]">
-            <span className="text-xs text-blue-100">Tiến độ liệu trình</span>
-            <h3 className="text-2xl sm:text-3xl font-black mt-0.5">{progressPercent}%</h3>
-          </div>
-          <div className="bg-amber-500/20 backdrop-blur-md p-4 rounded-2xl border border-amber-300/30 text-center min-w-[140px]">
-            <span className="text-xs text-amber-200 flex items-center justify-center space-x-1">
-              <Dumbbell className="w-3.5 h-3.5" />
-              <span>Bài tập hôm nay</span>
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-black text-amber-300 mt-0.5">
-              {completedExIds.length}/{assignedExs.length}
-            </h3>
-          </div>
-        </div>
-      </div>
-
-      {/* Primary Navigation Switcher */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveSubTab('overview');
-            if (onSwitchTab) onSwitchTab('overview');
-          }}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition ${
-            activeSubTab === 'overview'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Hồ Sơ EMR & Liệu Trình</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveSubTab('exercises');
-            if (onSwitchTab) onSwitchTab('exercises');
-          }}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition ${
-            activeSubTab === 'exercises'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Dumbbell className="w-4 h-4" />
-          <span>Bài Tập Phục Hồi Tại Nhà</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-              activeSubTab === 'exercises'
-                ? 'bg-white text-blue-700'
-                : 'bg-blue-100 text-blue-700'
+        {/* Primary Navigation Switcher */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSubTab('checklist');
+              if (onSwitchTab) onSwitchTab('checklist');
+            }}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
+              activeSubTab === 'checklist'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            {assignedExs.length} bài
-          </span>
-        </button>
+            <ListTodo className="w-4 h-4" />
+            <span>Kế Hoạch & Việc Cần Làm</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeSubTab === 'checklist'
+                  ? 'bg-white text-orange-700'
+                  : 'bg-amber-100 text-amber-900'
+              }`}
+            >
+              {completedChecklistCount}/{totalChecklistCount}
+            </span>
+          </button>
 
-        {/* SUBTAB 3: GÓI BẢO HÀNH & BẢO DƯỠNG */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveSubTab('warranty');
-            if (onSwitchTab) onSwitchTab('warranty');
-          }}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
-            activeSubTab === 'warranty'
-              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/20'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4" />
-          <span>Gói Bảo Hành & Bảo Dưỡng</span>
-          {myWarranty ? (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
-              {myWarranty.status}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSubTab('overview');
+              if (onSwitchTab) onSwitchTab('overview');
+            }}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition ${
+              activeSubTab === 'overview'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Hồ Sơ EMR & Liệu Trình</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSubTab('exercises');
+              if (onSwitchTab) onSwitchTab('exercises');
+            }}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition ${
+              activeSubTab === 'exercises'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Dumbbell className="w-4 h-4" />
+            <span>Bài Tập Phục Hồi Tại Nhà</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeSubTab === 'exercises'
+                  ? 'bg-white text-blue-700'
+                  : 'bg-blue-100 text-blue-700'
+              }`}
+            >
+              {assignedExs.length} bài
             </span>
-          ) : (
-            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-slate-100 text-slate-500">
-              Quyền lợi
-            </span>
-          )}
-        </button>
-      </div>
+          </button>
+
+          {/* SUBTAB 3: GÓI BẢO HÀNH & BẢO DƯỠNG */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSubTab('warranty');
+              if (onSwitchTab) onSwitchTab('warranty');
+            }}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
+              activeSubTab === 'warranty'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Gói Bảo Hành & Bảo Dưỡng</span>
+            {myWarranty ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                {myWarranty.status}
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-slate-100 text-slate-500">
+                Quyền lợi
+              </span>
+            )}
+          </button>
+        </div>
 
       {/* VIEW 1: OVERVIEW TAB */}
       {activeSubTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
+          {/* Top Quick Action Banner: Việc Cần Làm Hôm Nay */}
+          <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-100/60 p-5 rounded-3xl border border-amber-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <span className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-amber-500/25 flex-shrink-0">
+                📋
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Kế Hoạch & Việc Bạn Cần Làm Hôm Nay
+                  </h3>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                    {completedChecklistCount}/{totalChecklistCount} hoàn thành
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Thực hiện đúng thói quen tư thế, bài tập trị liệu và lời dặn của Bác sĩ theo phác đồ độ tuổi
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('checklist')}
+              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition flex items-center justify-center space-x-1.5 self-start md:self-auto cursor-pointer"
+            >
+              <ListTodo className="w-4 h-4" />
+              <span>Xem & Đánh Dấu Chi Tiết</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column: EMR Detail & Progression & Treatments */}
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm lg:col-span-2 space-y-6">
             {/* Diagnostic overview */}
@@ -815,6 +1000,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* VIEW 2: DEDICATED HOME EXERCISES TAB */}
@@ -1391,6 +1577,16 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
         </div>
       )}
 
+      {/* VIEW 4: DAILY CHECKLIST & ACTION PLAN */}
+      {activeSubTab === 'checklist' && (
+        <div className="space-y-6">
+          <PatientDailyChecklist
+            patient={patientData}
+            onToggleTask={handleToggleChecklistTask}
+          />
+        </div>
+      )}
+
       {/* VIDEO POPUP MODAL */}
       {activeVideoEx && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
@@ -1452,6 +1648,96 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                 type="button"
                 onClick={() => setActiveVideoEx(null)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Avatar Picker Modal */}
+      {showAvatarPickerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-amber-500" />
+                  <span>Chọn Ảnh Minh Họa Gốc</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Bộ 10 hình vẽ minh họa phong cách y tế chuẩn xác cho các nhóm đối tượng và bài tập
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAvatarPickerModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto p-1">
+              {ALL_AVATAR_PRESETS.map((preset) => {
+                const isSelected = (!patientData.avatar || patientData.avatar === preset.src) && patientData.avatarType === preset.key;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => {
+                      const updated = {
+                        ...patientData,
+                        avatar: preset.src,
+                        avatarType: preset.key,
+                      };
+                      setPatientData(updated);
+                      try {
+                        const raw = localStorage.getItem('bp_patients');
+                        if (raw) {
+                          const list = JSON.parse(raw);
+                          const nextList = list.map((p: Patient) => (p.id === patient.id ? updated : p));
+                          localStorage.setItem('bp_patients', JSON.stringify(nextList));
+                        }
+                      } catch (err) {
+                        console.error(err);
+                      }
+                      if (onUpdatePatient) onUpdatePatient(updated);
+                      setShowAvatarPickerModal(false);
+                    }}
+                    className={`p-3 rounded-2xl border flex flex-col items-center text-center transition group ${
+                      isSelected
+                        ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-400/40 shadow-md'
+                        : 'bg-slate-50 hover:bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 p-1 mb-2 flex items-center justify-center overflow-hidden shadow-xs group-hover:scale-105 transition-transform">
+                      <img
+                        src={preset.src}
+                        alt={preset.title}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <span className="text-xs font-black text-slate-800 line-clamp-1">
+                      {preset.emoji} {preset.title}
+                    </span>
+                    <span className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">
+                      {preset.key}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-xs text-slate-500 italic">
+                * Bạn cũng có thể bấm icon camera bên dưới để tải ảnh riêng từ thiết bị.
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAvatarPickerModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
               >
                 Đóng
               </button>

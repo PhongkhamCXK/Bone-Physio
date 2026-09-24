@@ -13,8 +13,13 @@ import {
   ChevronRight,
   ShieldCheck,
   Upload,
+  CheckCircle2,
+  ListTodo,
+  X,
 } from 'lucide-react';
 import { uid, STANDARD_DIET_PLAN } from '../data/seedData';
+import { PatientAvatar } from './PatientAvatar';
+import { PatientDailyChecklist } from './PatientDailyChecklist';
 
 interface PatientsTabProps {
   patients: Patient[];
@@ -36,6 +41,45 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [viewingChecklistPatient, setViewingChecklistPatient] = useState<Patient | null>(null);
+
+  const getAgeGroup = (age: number) => {
+    if (age <= 17)
+      return {
+        label: 'Học sinh / Thiếu niên (15t)',
+        role: 'Sửa dáng học đường, chống gù',
+        color: 'bg-amber-100 text-amber-900 border-amber-300',
+      };
+    if (age <= 24)
+      return {
+        label: 'Thanh niên / Thể thao (15-24t)',
+        role: 'Phục hồi dây chằng gối',
+        color: 'bg-sky-100 text-sky-900 border-sky-300',
+      };
+    if (age < 28)
+      return {
+        label: 'Văn phòng trẻ (25t+)',
+        role: 'Tư thế công sở chuẩn',
+        color: 'bg-indigo-100 text-indigo-900 border-indigo-300',
+      };
+    if (age < 40)
+      return {
+        label: 'Trẻ trung / Cặp đôi (28t+)',
+        role: 'Từ bỏ thói quen xấu',
+        color: 'bg-teal-100 text-teal-900 border-teal-300',
+      };
+    if (age < 50)
+      return {
+        label: 'Trung niên (40t+)',
+        role: 'Tư thế lao động đúng',
+        color: 'bg-orange-100 text-orange-900 border-orange-300',
+      };
+    return {
+      label: 'Cao tuổi (50-78t)',
+      role: 'Xoa dịu khớp, dưỡng sinh',
+      color: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+    };
+  };
 
   // Form fields
   const [name, setName] = useState('');
@@ -53,6 +97,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
   const [history, setHistory] = useState('');
   const [nextRevisitDate, setNextRevisitDate] = useState('');
   const [revisitNotes, setRevisitNotes] = useState('');
+  const [avatarType, setAvatarType] = useState<string>('middle_age_couple');
+  const [customAvatar, setCustomAvatar] = useState<string>('');
 
   const handleOpenAdd = () => {
     setEditingPatient(null);
@@ -69,6 +115,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
     setHistory('Đau âm ỉ tăng dần khi ngồi lâu.');
     setNextRevisitDate('');
     setRevisitNotes('');
+    setAvatarType('middle_age_couple');
+    setCustomAvatar('');
     setIsModalOpen(true);
   };
 
@@ -87,6 +135,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
     setHistory(p.history || '');
     setNextRevisitDate(p.nextRevisitDate || '');
     setRevisitNotes(p.revisitNotes || '');
+    setAvatarType(p.avatarType || 'middle_age_couple');
+    setCustomAvatar(p.avatar || '');
     setIsModalOpen(true);
   };
 
@@ -108,6 +158,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
         history,
         nextRevisitDate: nextRevisitDate || undefined,
         revisitNotes: revisitNotes || undefined,
+        avatarType: avatarType as any,
+        avatar: customAvatar || undefined,
       });
     } else {
       const newPatient: Patient = {
@@ -125,6 +177,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
         history,
         nextRevisitDate: nextRevisitDate || undefined,
         revisitNotes: revisitNotes || undefined,
+        avatarType: avatarType as any,
+        avatar: customAvatar || undefined,
         dietPlan: STANDARD_DIET_PLAN,
         healthMetrics: [],
         assignedExercises: (() => {
@@ -216,28 +270,51 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filtered.map((p) => {
           const additionalCount = p.additionalRegions?.length || 0;
+          const ageGroup = getAgeGroup(p.age);
+          const checklist = p.dailyChecklist || [];
+          const completedCount = checklist.filter((i) => i.isCompleted).length;
+
           return (
             <div
               key={p.id}
               className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition flex flex-col justify-between"
             >
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full font-mono">
-                    {p.id}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {p.gender}, {p.age} tuổi
-                  </span>
-                </div>
+                {/* Avatar and basic info */}
+                <div className="flex items-start gap-3.5 mb-3.5">
+                  <PatientAvatar
+                    avatarUrl={p.avatar}
+                    avatarType={p.avatarType}
+                    name={p.name}
+                    age={p.age}
+                    gender={p.gender}
+                    size="lg"
+                    showBadge
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1 gap-1">
+                      <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-mono">
+                        {p.id}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${ageGroup.color}`}
+                      >
+                        {ageGroup.label} • {p.age}t
+                      </span>
+                    </div>
 
-                <h3 className="text-base font-bold text-slate-900 mb-1">
-                  {p.name}
-                </h3>
-                <p className="text-xs text-slate-500 mb-3 flex items-center space-x-1">
-                  <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{p.phone}</span>
-                </p>
+                    <h3 className="text-base font-bold text-slate-900 truncate">
+                      {p.name}
+                    </h3>
+                    <p className="text-[11px] font-semibold text-slate-500 mb-0.5 truncate">
+                      🎯 {ageGroup.role}
+                    </p>
+                    <p className="text-xs text-slate-500 flex items-center space-x-1">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{p.phone}</span>
+                    </p>
+                  </div>
+                </div>
 
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 mb-3 space-y-1.5 text-xs">
                   <p className="text-slate-700">
@@ -248,9 +325,11 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
                     <strong className="text-slate-900">Chẩn đoán:</strong>{' '}
                     {p.diagnosis}
                   </p>
-                  <p className="text-slate-500 text-[11px]">
-                    <strong>Ngày đầu khám:</strong> {p.firstVisitDateTime || 'Chưa ghi'}
-                  </p>
+                  {p.occupation && (
+                    <p className="text-slate-500 text-[11px]">
+                      <strong>Nghề nghiệp:</strong> {p.occupation}
+                    </p>
+                  )}
 
                   {/* Highlight additional regions created from EMR button */}
                   {additionalCount > 0 && (
@@ -273,12 +352,27 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
                   )}
                 </div>
 
-                <p className="text-xs text-slate-500 line-clamp-2 italic">
-                  "{p.history || p.chiefComplaint}"
-                </p>
+                {/* Quick Doctor Advice / Checklist Snippet */}
+                {p.doctorAdvice && (
+                  <p className="text-[11px] text-amber-900 bg-amber-50/80 border border-amber-200/60 rounded-xl p-2.5 mb-2.5 line-clamp-2 leading-relaxed">
+                    💡 <strong>Bác sĩ dặn:</strong> {p.doctorAdvice}
+                  </p>
+                )}
               </div>
 
-              <div className="pt-4 mt-4 border-t border-slate-100 space-y-2">
+              <div className="pt-3 mt-2 border-t border-slate-100 space-y-2">
+                {/* Daily Checklist Action Button */}
+                <button
+                  type="button"
+                  onClick={() => setViewingChecklistPatient(p)}
+                  className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm shadow-orange-500/20"
+                >
+                  <ListTodo className="w-3.5 h-3.5" />
+                  <span>
+                    Việc Cần Làm Hôm Nay ({completedCount}/{checklist.length || 4})
+                  </span>
+                </button>
+
                 {/* Core action to view EMR and add regions */}
                 <button
                   type="button"
@@ -340,6 +434,98 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Avatar Selection & Upload */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span>Ảnh Đại Diện Bệnh Nhân</span>
+                  </label>
+                  <label className="cursor-pointer text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-white px-2.5 py-1 rounded-lg border border-blue-200 shadow-xs flex items-center gap-1 hover:bg-blue-50 transition">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Tải ảnh từ máy</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) {
+                              setCustomAvatar(ev.target.result as string);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {[
+                    { key: 'student_effort', label: 'Học sinh ôn thi', sub: 'Băng đô sao' },
+                    { key: 'sports_cheer', label: 'Cố lên! (Ganbarou)', sub: 'Thanh niên' },
+                    { key: 'office_posture', label: 'Từ chối tư thế xấu', sub: 'Stop (Dơ tay)' },
+                    { key: 'cross_forbidden', label: 'Bắt chéo cấm kỵ', sub: 'Dấu X (ダメ)' },
+                    { key: 'young_couple', label: 'Cặp đôi thanh niên', sub: 'Bạn bè trẻ' },
+                    { key: 'young_interview', label: 'Phỏng vấn thẳng lưng', sub: 'Công sở' },
+                    { key: 'middle_age_burden', label: 'Trụ cột gánh vác', sub: 'Gia đình' },
+                    { key: 'elderly_massage', label: 'Đấm bóp vai ông bà', sub: 'Con cháu' },
+                    { key: 'elderly_consultation', label: 'Tư vấn sức khỏe', sub: 'An sinh người già' },
+                    { key: 'elderly_bed_support', label: 'Hỗ trợ ngồi dậy', sub: 'Tại giường' },
+                  ].map((cat) => {
+                    const isSelected = !customAvatar && avatarType === cat.key;
+                    return (
+                      <button
+                        key={cat.key}
+                        type="button"
+                        onClick={() => {
+                          setCustomAvatar('');
+                          setAvatarType(cat.key);
+                        }}
+                        className={`p-1.5 rounded-xl border flex flex-col items-center text-center transition ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-400/40 shadow-xs'
+                            : 'bg-white hover:bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        <PatientAvatar avatarType={cat.key} size="md" />
+                        <span className="text-[10px] font-bold text-slate-800 mt-1 line-clamp-1">
+                          {cat.label}
+                        </span>
+                        <span className="text-[9px] text-slate-500 line-clamp-1">
+                          {cat.sub}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {customAvatar && (
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl p-2">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={customAvatar}
+                        alt="Custom Avatar"
+                        className="w-8 h-8 rounded-lg object-contain bg-white border border-emerald-300"
+                      />
+                      <span className="text-xs text-emerald-800 font-semibold">
+                        Đang dùng ảnh tải lên từ máy của bạn
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomAvatar('')}
+                      className="text-xs text-rose-600 hover:text-rose-700 font-bold px-2 py-0.5"
+                    >
+                      Bỏ ảnh
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -533,6 +719,69 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem Kế Hoạch & Việc Bệnh Nhân Cần Làm */}
+      {viewingChecklistPatient && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-100 my-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setViewingChecklistPatient(null)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <PatientAvatar
+                  avatarType={viewingChecklistPatient.avatarType}
+                  name={viewingChecklistPatient.name}
+                  age={viewingChecklistPatient.age}
+                  size="xl"
+                />
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">
+                    {viewingChecklistPatient.name}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {viewingChecklistPatient.gender}, {viewingChecklistPatient.age} tuổi • {viewingChecklistPatient.occupation || 'Bệnh nhân'}
+                  </p>
+                  <span className="inline-block mt-1 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                    {viewingChecklistPatient.diagnosis}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <PatientDailyChecklist
+              patient={viewingChecklistPatient}
+              onToggleTask={(taskId) => {
+                const currentTasks = viewingChecklistPatient.dailyChecklist || [];
+                const updatedTasks = currentTasks.map((t) =>
+                  t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t
+                );
+                const updatedPatient = {
+                  ...viewingChecklistPatient,
+                  dailyChecklist: updatedTasks,
+                };
+                setViewingChecklistPatient(updatedPatient);
+                onUpdatePatient(updatedPatient);
+              }}
+            />
+
+            <div className="mt-5 pt-4 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingChecklistPatient(null)}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

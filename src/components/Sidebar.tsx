@@ -16,6 +16,7 @@ import {
   X,
   ShieldCheck,
   Database,
+  ListTodo,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -39,6 +40,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getNavItems = () => {
     if (currentUser.role === 'patient') {
       return [
+        {
+          id: 'patient-checklist',
+          label: 'Kế Hoạch & Việc Cần Làm',
+          icon: ListTodo,
+        },
         {
           id: 'patient-portal',
           label: 'EMR & Liệu Trình Của Tôi',

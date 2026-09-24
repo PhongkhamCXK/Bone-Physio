@@ -3,6 +3,8 @@ import { Patient, BodyRegion, Treatment, HealthMetric, Exercise } from '../types
 import { AddRegionModal } from './AddRegionModal';
 import { RevisitReminderConfirmationModal } from './dashboard/RevisitReminderConfirmationModal';
 import { RevisitItem } from '../utils/revisitUtils';
+import { PatientAvatar } from './PatientAvatar';
+import { PatientDailyChecklist } from './PatientDailyChecklist';
 import {
   X,
   Printer,
@@ -131,18 +133,29 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
         <div className="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl border border-slate-100 my-6 max-h-[92vh] flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 flex-shrink-0">
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="px-2.5 py-1 bg-blue-100 text-blue-700 font-mono text-xs font-bold rounded-lg">
-                  {patient.id}
-                </span>
-                <h2 className="text-xl font-bold text-slate-900">
-                  Hồ Sơ EMR Chi Tiết: {patient.name}
-                </h2>
+            <div className="flex items-center gap-3.5">
+              <PatientAvatar
+                avatarUrl={patient.avatar}
+                avatarType={patient.avatarType}
+                name={patient.name}
+                age={patient.age}
+                gender={patient.gender}
+                size="lg"
+                showBadge
+              />
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="px-2.5 py-1 bg-blue-100 text-blue-700 font-mono text-xs font-bold rounded-lg">
+                    {patient.id}
+                  </span>
+                  <h2 className="text-xl font-bold text-slate-900">
+                    Hồ Sơ EMR Chi Tiết: {patient.name}
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {patient.gender}, {patient.age} tuổi • SĐT: {patient.phone} • {patient.occupation || 'Nghề nghiệp: Chưa cập nhật'} • Ngày đầu khám: {patient.firstVisitDateTime || 'Chưa ghi'}
+                </p>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {patient.gender}, {patient.age} tuổi • SĐT: {patient.phone} • Ngày đầu khám: {patient.firstVisitDateTime || 'Chưa ghi'}
-              </p>
             </div>
             <div className="flex items-center space-x-2">
               <button
@@ -189,6 +202,39 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   {patient.password}
                 </p>
               </div>
+            </div>
+
+            {/* Patient Daily Action Plan & Home Guidance */}
+            <div className="bg-gradient-to-br from-amber-50/70 via-orange-50/50 to-white p-4 sm:p-5 rounded-3xl border border-amber-200/80 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <span className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                    📋
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Kế Hoạch & Việc Bệnh Nhân Cần Thực Hiện Tại Nhà
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Hướng dẫn thói quen, bài tập và lưu ý theo đúng độ tuổi & bệnh lý
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <PatientDailyChecklist
+                patient={patient}
+                onToggleTask={(taskId) => {
+                  const tasks = patient.dailyChecklist || [];
+                  const updatedTasks = tasks.map((t) =>
+                    t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t
+                  );
+                  onUpdatePatient({
+                    ...patient,
+                    dailyChecklist: updatedTasks,
+                  });
+                }}
+              />
             </div>
 
             {/* KEY USER FEATURE: VÙNG ĐIỀU TRỊ & NÚT TẠO VÙNG MỚI */}

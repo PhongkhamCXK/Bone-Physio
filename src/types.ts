@@ -94,6 +94,15 @@ export interface DietDay {
   dinner: string;
 }
 
+export interface DailyChecklistItem {
+  id: string;
+  task: string;
+  timeOfDay: 'Sáng' | 'Trưa' | 'Chiều' | 'Tối' | 'Cả ngày';
+  category: 'exercise' | 'posture' | 'diet' | 'warning' | 'rest';
+  isCompleted: boolean;
+  note?: string;
+}
+
 export interface Patient {
   id: string; // BN001, BN002...
   name: string;
@@ -104,6 +113,24 @@ export interface Patient {
   bodyPart: string;
   diagnosis: string;
   history: string;
+  avatar?: string;
+  avatarType?:
+    | 'student_effort'
+    | 'sports_cheer'
+    | 'stop_bad_habits'
+    | 'cross_forbidden'
+    | 'office_posture'
+    | 'young_couple'
+    | 'young_interview'
+    | 'middle_age_burden'
+    | 'middle_age_couple'
+    | 'elderly_massage'
+    | 'elderly_consultation'
+    | 'elderly_bed_support'
+    | 'elderly_senior_group'
+    | string;
+  doctorAdvice?: string; // Lời dặn dò quan trọng từ Bác sĩ
+  dailyChecklist?: DailyChecklistItem[]; // Danh sách việc người bệnh cần làm mỗi ngày
   firstVisitDateTime?: string; // Ngày khám đầu tiên trong EMR
   occupation?: string;
   chiefComplaint?: string;

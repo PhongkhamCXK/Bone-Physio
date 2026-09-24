@@ -1081,7 +1081,8 @@ export default function App() {
 
             {(activeTab === 'patient-portal' ||
               activeTab === 'patient-exercises' ||
-              activeTab === 'patient-warranty') &&
+              activeTab === 'patient-warranty' ||
+              activeTab === 'patient-checklist') &&
               activePortalPatient && (
                 <PatientPortalTab
                   patient={activePortalPatient}
@@ -1090,11 +1091,14 @@ export default function App() {
                   invoices={invoices}
                   exercises={exercises}
                   warranties={warranties}
+                  onUpdatePatient={handleUpdatePatient}
                   initialTab={
                     activeTab === 'patient-warranty'
                       ? 'warranty'
                       : activeTab === 'patient-exercises'
                       ? 'exercises'
+                      : activeTab === 'patient-checklist'
+                      ? 'checklist'
                       : 'overview'
                   }
                   onSwitchTab={(tab) =>
@@ -1103,6 +1107,8 @@ export default function App() {
                         ? 'patient-warranty'
                         : tab === 'exercises'
                         ? 'patient-exercises'
+                        : tab === 'checklist'
+                        ? 'patient-checklist'
                         : 'patient-portal'
                     )
                   }
