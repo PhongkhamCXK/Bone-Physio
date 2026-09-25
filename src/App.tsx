@@ -12,6 +12,7 @@ import {
   Expense,
   TaxConfig,
   WarrantyRecord,
+  StandardEMRTemplate,
 } from './types';
 import {
   INITIAL_PATIENTS,
@@ -24,6 +25,8 @@ import {
   INITIAL_EXPENSES,
   INITIAL_WARRANTIES,
   uid,
+  PATIENT_CLINICAL_HISTORIES,
+  getDefaultClinicalDetails,
 } from './data/seedData';
 import { exportBothExcelAndJson } from './utils/exportUtils';
 import { DEFAULT_TAX_CONFIG } from './utils/taxCalculation';
@@ -47,6 +50,7 @@ import { CustomerCareTab } from './components/CustomerCareTab';
 import { PatientPortalTab } from './components/PatientPortalTab';
 import { WarrantyTab } from './components/WarrantyTab';
 import { MasterDataPoolTab } from './components/MasterDataPoolTab';
+import { StandardEMRTab } from './components/StandardEMRTab';
 import { EMRDetailModal } from './components/EMRDetailModal';
 import { LoginModal, LoginPage } from './components/LoginModal';
 import { CheckInOutModal } from './components/CheckInOutModal';
@@ -62,8 +66,35 @@ import { mergeData } from './utils/importUtils';
 
 export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
   return pts.map((p) => {
-    if (!p.assignedExercises || p.assignedExercises.length === 0) {
-      const bpLower = (p.bodyPart || '').toLowerCase();
+    const updated: Patient = { ...p };
+    const clinical =
+      PATIENT_CLINICAL_HISTORIES[p.id] ||
+      getDefaultClinicalDetails(p.bodyPart, p.occupation);
+
+    if (!updated.pastMedicalHistory) {
+      updated.pastMedicalHistory = clinical.pastMedicalHistory;
+    }
+    if (!updated.surgicalHistory) {
+      updated.surgicalHistory = clinical.surgicalHistory;
+    }
+    if (!updated.allergies) {
+      updated.allergies = clinical.allergies;
+    }
+    if (!updated.habits) {
+      updated.habits = clinical.habits;
+    }
+    if (!updated.familyHistory) {
+      updated.familyHistory = clinical.familyHistory;
+    }
+    if (!updated.preliminaryDiagnosis) {
+      updated.preliminaryDiagnosis = clinical.preliminaryDiagnosis;
+    }
+    if (!updated.presentIllness) {
+      updated.presentIllness = clinical.presentIllness || updated.history;
+    }
+
+    if (!updated.assignedExercises || updated.assignedExercises.length === 0) {
+      const bpLower = (updated.bodyPart || '').toLowerCase();
       let defaultExIds: string[] = [];
       if (bpLower.includes('cổ') || bpLower.includes('vai') || bpLower.includes('gáy')) {
         defaultExIds = ['EX001', 'EX002', 'EX003'];
@@ -72,9 +103,9 @@ export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
       } else {
         defaultExIds = ['EX004', 'EX005', 'EX006'];
       }
-      return { ...p, assignedExercises: defaultExIds };
+      updated.assignedExercises = defaultExIds;
     }
-    return p;
+    return updated;
   });
 };
 
@@ -86,6 +117,13 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((p: any) => p.id));
+          const missingSeed = INITIAL_PATIENTS.filter((ip) => !existingIds.has(ip.id));
+          if (missingSeed.length > 0) {
+            const merged = [...parsed, ...missingSeed];
+            localStorage.setItem('bp_patients', JSON.stringify(merged));
+            return ensurePatientExercises(merged);
+          }
           return ensurePatientExercises(parsed);
         }
       } catch {
@@ -97,7 +135,24 @@ export default function App() {
 
   const [treatments, setTreatments] = useState<Treatment[]>(() => {
     const saved = localStorage.getItem('bp_treatments');
-    return saved ? JSON.parse(saved) : INITIAL_TREATMENTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((t: any) => t.id));
+          const missingSeed = INITIAL_TREATMENTS.filter((it) => !existingIds.has(it.id));
+          if (missingSeed.length > 0) {
+            const merged = [...parsed, ...missingSeed];
+            localStorage.setItem('bp_treatments', JSON.stringify(merged));
+            return merged;
+          }
+          return parsed;
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return INITIAL_TREATMENTS;
   });
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
@@ -443,6 +498,62 @@ export default function App() {
   const handleDeletePatient = (id: string) => {
     setPatients((prev) => prev.filter((p) => p.id !== id));
     showToast('Đã xóa bệnh nhân khỏi danh sách.');
+  };
+
+  const handleCreatePatientFromStandard = (template: StandardEMRTemplate) => {
+    const newId = `BN${String(patients.length + 1).padStart(3, '0')}`;
+    let parsedAge = 35;
+    if (template.typicalAgeGroup.includes('-')) {
+      const match = template.typicalAgeGroup.match(/(\d+)/);
+      if (match) parsedAge = parseInt(match[1]);
+    }
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    const newPt: Patient = {
+      id: newId,
+      name: 'Bệnh Nhân - ' + template.shortDiagnosis.slice(0, 30),
+      age: parsedAge,
+      gender:
+        template.typicalAgeGroup.includes('ông') || template.typicalAgeGroup.includes('Bác')
+          ? 'Nam'
+          : 'Nữ',
+      phone: '09' + Math.floor(10000000 + Math.random() * 90000000),
+      password: '123',
+      bodyPart: template.bodyPart,
+      diagnosis: template.diagnosis,
+      occupation: template.category,
+      chiefComplaint: template.chiefComplaint,
+      history: template.history,
+      firstVisitDateTime: new Date().toISOString().slice(0, 16),
+      nextRevisitDate: d.toISOString().split('T')[0],
+      revisitNotes: template.revisitMilestones,
+      revisitDoctor: 'BS. CKII Hoàng Minh',
+      doctorAdvice: template.doctorAdvice,
+      assignedExercises: template.assignedExerciseIds,
+      avatarType: template.avatarType || 'office_posture',
+      dailyChecklist: template.dailyChecklistTasks.map((t, idx) => ({
+        id: `cl_std_${Date.now()}_${idx}`,
+        task: t.task,
+        timeOfDay: t.timeOfDay,
+        category: t.category,
+        isCompleted: false,
+        note: t.note,
+      })),
+      healthMetrics: [
+        {
+          id: uid('HM'),
+          date: new Date().toISOString().split('T')[0],
+          painScore: 5,
+          rangeOfMotion: template.clinicalFindings.rangeOfMotion,
+          bloodPressure: '120/80 mmHg',
+          notes: 'Khám theo chuẩn EMR ' + template.code,
+        },
+      ],
+      additionalRegions: [],
+    };
+    setPatients((prev) => [newPt, ...prev]);
+    setSelectedEMRPatient(newPt);
+    showToast(`Đã tạo hồ sơ bệnh nhân ${newPt.id} từ Chuẩn Bệnh Án "${template.shortDiagnosis}"!`);
   };
 
   // Treatment handlers
@@ -921,6 +1032,13 @@ export default function App() {
                 onDeletePatient={handleDeletePatient}
                 onOpenEMR={(p) => setSelectedEMRPatient(p)}
                 onOpenImport={() => setIsImportModalOpen(true)}
+              />
+            )}
+
+            {activeTab === 'emr-standards' && (
+              <StandardEMRTab
+                onCreatePatientFromTemplate={handleCreatePatientFromStandard}
+                showToast={showToast}
               />
             )}
 

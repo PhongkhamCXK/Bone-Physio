@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Database,
   ListTodo,
+  BookOpen,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -93,6 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'dashboard', label: 'Dashboard Tổng Quan', icon: LayoutDashboard },
       { id: 'appointments', label: 'Lịch Hẹn Khám', icon: Calendar },
       { id: 'patients', label: 'Bệnh Nhân & EMR', icon: Users },
+      { id: 'emr-standards', label: 'Bộ Chuẩn Bệnh Án', icon: BookOpen },
       { id: 'bodymap', label: 'Sơ Đồ Cột Sống & Khớp Gối', icon: Activity },
       { id: 'treatments', label: 'Quản Lý Liệu Trình', icon: Layers },
       { id: 'warranty', label: 'Bảo Hành & Bảo Dưỡng', icon: ShieldCheck },

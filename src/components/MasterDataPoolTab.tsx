@@ -36,7 +36,9 @@ import {
   Clock,
   Eye,
   Trash2,
+  BookOpen,
 } from 'lucide-react';
+import { STANDARD_EMR_TEMPLATES } from '../data/standardEMRData';
 import { exportBothExcelAndJson } from '../utils/exportUtils';
 import {
   getLastAutoExportTime,
@@ -384,6 +386,15 @@ export const MasterDataPoolTab: React.FC<MasterDataPoolTabProps> = ({
             w.packageName.toLowerCase().includes(term) ||
             w.phone.includes(term)
         );
+      case 'emr_standards':
+        return STANDARD_EMR_TEMPLATES.filter(
+          (s) =>
+            !term ||
+            s.title.toLowerCase().includes(term) ||
+            s.shortDiagnosis.toLowerCase().includes(term) ||
+            s.icd10.toLowerCase().includes(term) ||
+            s.bodyPart.toLowerCase().includes(term)
+        );
       default:
         return [];
     }
@@ -499,9 +510,10 @@ export const MasterDataPoolTab: React.FC<MasterDataPoolTabProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2.5">
           {[
             { id: 'patients', label: 'Bệnh Nhân & EMR', count: patients.length, icon: Users, color: 'blue' },
+            { id: 'emr_standards', label: 'Chuẩn Bệnh Án', count: STANDARD_EMR_TEMPLATES.length, icon: BookOpen, color: 'indigo' },
             { id: 'treatments', label: 'Liệu Trình', count: treatments.length, icon: Layers, color: 'indigo' },
             { id: 'appointments', label: 'Lịch Hẹn Khám', count: appointments.length, icon: Calendar, color: 'cyan' },
             { id: 'invoices', label: 'Hóa Đơn Thu', count: invoices.length, icon: CreditCard, color: 'emerald' },

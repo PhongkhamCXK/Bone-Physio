@@ -7,10 +7,15 @@ import {
   Staff,
   Exercise,
   ProtocolTemplate,
+  StandardEMRTemplate,
   DietDay,
   Expense,
   WarrantyRecord,
 } from '../types';
+import { STANDARD_EMR_TEMPLATES } from './standardEMRData';
+import { PATIENT_CLINICAL_HISTORIES, getDefaultClinicalDetails } from './patientClinicalHistory';
+
+export { STANDARD_EMR_TEMPLATES, PATIENT_CLINICAL_HISTORIES, getDefaultClinicalDetails };
 
 export function uid(prefix: string): string {
   return (
@@ -179,7 +184,7 @@ const getRelativeDateStr = (days: number) => {
   return d.toISOString().split('T')[0];
 };
 
-export const INITIAL_PATIENTS: Patient[] = [
+const RAW_INITIAL_PATIENTS: Patient[] = [
   {
     id: 'BN001',
     name: 'Nguyễn Minh Triết',
@@ -849,6 +854,23 @@ export const INITIAL_PATIENTS: Patient[] = [
     additionalRegions: [],
   },
 ];
+
+export const INITIAL_PATIENTS: Patient[] = RAW_INITIAL_PATIENTS.map((p) => {
+  const clinical = PATIENT_CLINICAL_HISTORIES[p.id];
+  if (clinical) {
+    return {
+      ...p,
+      presentIllness: p.presentIllness || clinical.presentIllness,
+      pastMedicalHistory: p.pastMedicalHistory || clinical.pastMedicalHistory,
+      surgicalHistory: p.surgicalHistory || clinical.surgicalHistory,
+      allergies: p.allergies || clinical.allergies,
+      habits: p.habits || clinical.habits,
+      familyHistory: p.familyHistory || clinical.familyHistory,
+      preliminaryDiagnosis: p.preliminaryDiagnosis || clinical.preliminaryDiagnosis,
+    };
+  }
+  return p;
+});
 
 export const INITIAL_TREATMENTS: Treatment[] = [
   {

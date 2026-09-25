@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ProtocolTemplate, Treatment } from '../types';
-import { PROTOCOL_TEMPLATES } from '../data/seedData';
-import { X, Copy, Check, Sparkles, Search, BookOpen } from 'lucide-react';
+import { ProtocolTemplate, Treatment, StandardEMRTemplate } from '../types';
+import { PROTOCOL_TEMPLATES, STANDARD_EMR_TEMPLATES } from '../data/seedData';
+import { X, Copy, Check, Sparkles, Search, BookOpen, Stethoscope } from 'lucide-react';
 
 interface CopyProtocolModalProps {
   isOpen: boolean;
@@ -17,10 +17,19 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
   existingTreatments,
 }) => {
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'standard' | 'treatments'>('standard');
+  const [activeTab, setActiveTab] = useState<'emr_standard' | 'standard' | 'treatments'>('emr_standard');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const filteredEMRStandard = STANDARD_EMR_TEMPLATES.filter(
+    (p) =>
+      p.title.toLowerCase().includes(search.toLowerCase()) ||
+      p.shortDiagnosis.toLowerCase().includes(search.toLowerCase()) ||
+      p.bodyPart.toLowerCase().includes(search.toLowerCase()) ||
+      p.icd10.toLowerCase().includes(search.toLowerCase()) ||
+      p.recommendedProtocol.toLowerCase().includes(search.toLowerCase())
+  );
 
   const filteredStandard = PROTOCOL_TEMPLATES.filter(
     (p) =>
@@ -53,7 +62,7 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 my-8">
         <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center space-x-2">
@@ -61,7 +70,7 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
                 <BookOpen className="w-4 h-4" />
               </span>
               <h3 className="text-lg font-bold text-slate-900">
-                Thư Viện Phác Đồ Điều Trị — Chỉ Cần 1-Click Copy
+                Thư Viện Phác Đồ Điều Trị & Chuẩn Bệnh Án
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-1">
@@ -77,36 +86,46 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
         </div>
 
         {/* Tab selector */}
-        <div className="flex items-center space-x-2 mb-4">
-          <div className="flex bg-slate-100 p-1 rounded-2xl flex-1 sm:flex-initial">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+          <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('emr_standard')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                activeTab === 'emr_standard'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              10 Chuẩn Bệnh Án EMR ({STANDARD_EMR_TEMPLATES.length})
+            </button>
             <button
               onClick={() => setActiveTab('standard')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                 activeTab === 'standard'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Phác Đồ Mẫu Chuẩn ({PROTOCOL_TEMPLATES.length})
+              Phác Đồ Ngắn ({PROTOCOL_TEMPLATES.length})
             </button>
             <button
               onClick={() => setActiveTab('treatments')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                 activeTab === 'treatments'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Từ Liệu Trình Bệnh Nhân Hiện Có ({existingTreatments.length})
+              Từ Bệnh Nhân ({existingTreatments.length})
             </button>
           </div>
 
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-[200px]">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm theo tên vùng, phác đồ, bệnh nhân..."
+              placeholder="Tìm theo tên vùng, phác đồ, ICD-10..."
               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
@@ -114,8 +133,78 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
         </div>
 
         {/* List of protocols */}
-        <div className="max-h-96 overflow-y-auto space-y-3 pr-1">
-          {activeTab === 'standard' ? (
+        <div className="max-h-[460px] overflow-y-auto space-y-3 pr-1">
+          {activeTab === 'emr_standard' ? (
+            filteredEMRStandard.length > 0 ? (
+              filteredEMRStandard.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  className="bg-slate-50 hover:bg-blue-50/50 p-4 rounded-2xl border border-slate-200 hover:border-blue-200 transition group"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                          {tpl.icd10}
+                        </span>
+                        <span className="text-xs font-bold text-slate-900">
+                          {tpl.title}
+                        </span>
+                        <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-medium">
+                          Vùng: {tpl.bodyPart}
+                        </span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium">
+                          {tpl.suggestedSessions} buổi chuẩn
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-700 mt-2 font-medium leading-relaxed">
+                        <strong>Phác đồ:</strong> {tpl.recommendedProtocol}
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {tpl.modalities.map((m, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[10px] bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded-lg"
+                          >
+                            ✓ {m}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopy(
+                          tpl.recommendedProtocol,
+                          tpl.id,
+                          tpl.suggestedSessions,
+                          tpl.bodyPart
+                        )
+                      }
+                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition flex-shrink-0"
+                    >
+                      {copiedId === tpl.id ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Đã Copy!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Áp Dụng Phác Đồ</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-8">
+                Không tìm thấy chuẩn bệnh án phù hợp.
+              </p>
+            )
+          ) : activeTab === 'standard' ? (
             filteredStandard.length > 0 ? (
               filteredStandard.map((proto) => (
                 <div
@@ -201,11 +290,8 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
                         Vùng: {t.bodyPart}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-700 font-medium mt-1.5">
+                    <p className="text-xs text-slate-600 mt-2 leading-relaxed">
                       {t.plan}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Tổng số: {t.total} buổi • Trạng thái: {t.status}
                     </p>
                   </div>
 
@@ -222,7 +308,7 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
                     ) : (
                       <>
                         <Copy className="w-3.5 h-3.5" />
-                        <span>Copy Qua Liệu Trình</span>
+                        <span>Copy Phác Đồ</span>
                       </>
                     )}
                   </button>
@@ -231,19 +317,16 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
             ))
           ) : (
             <p className="text-xs text-slate-400 text-center py-8">
-              Chưa có phác đồ điều trị nào từ danh sách bệnh nhân.
+              Chưa có liệu trình nào của bệnh nhân để copy.
             </p>
           )}
         </div>
 
-        <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-100 text-xs text-slate-500">
-          <span className="flex items-center text-blue-600 font-semibold">
-            <Sparkles className="w-3.5 h-3.5 mr-1" />
-            Nhấn "Copy" để đưa phác đồ ngay vào biểu mẫu
-          </span>
+        <div className="mt-5 pt-4 border-t border-slate-100 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition"
+            className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
           >
             Đóng
           </button>

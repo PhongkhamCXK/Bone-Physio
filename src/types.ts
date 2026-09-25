@@ -67,6 +67,55 @@ export interface ProtocolTemplate {
   suggestedSessions: number;
 }
 
+export interface StandardEMRTemplate {
+  id: string; // VD: 'EMR_STD_01'
+  code: string; // VD: 'M51.1-LUMBAR'
+  icd10: string; // VD: 'M51.1 / M54.4'
+  title: string; // VD: 'Chuẩn Bệnh Án: Thoát Vị Đĩa Đệm Thắt Lưng L4-L5 & Thần Kinh Tọa'
+  shortDiagnosis: string;
+  bodyPart: string; // 'Thắt lưng', 'Cổ', 'Khớp gối', etc.
+  category: 'Cột sống thắt lưng' | 'Cột sống cổ' | 'Khớp gối' | 'Khớp vai' | 'Học đường / Tư thế' | 'Chấn thương thể thao' | 'Người cao tuổi' | 'Bàn chân / Cổ chân' | 'Chi trên / Cổ tay';
+  typicalAgeGroup: string; // '25 - 60 tuổi'
+  typicalOccupation?: string; // Nghề nghiệp điển hình
+  genderSample?: 'Nam' | 'Nữ' | 'Nam / Nữ'; // Giới tính mẫu
+  firstVisitDateTimeSample?: string; // Ngày giờ đầu tiên đến khám mẫu
+  chiefComplaint: string; // Lý do vào viện & triệu chứng khởi phát
+  history: string; // Tóm tắt bệnh sử
+  presentIllness?: string; // Bệnh sử chi tiết của bệnh nhân
+  pastMedicalHistory?: PastMedicalHistory; // Tiền căn nội khoa: Tăng huyết áp, ĐTĐ, bệnh khác, nơi chẩn đoán, thuốc đang dùng
+  surgicalHistory?: string; // Tiền căn ngoại khoa: Phẫu thuật, can thiệp gì hay không
+  allergies?: AllergiesHistory; // Dị ứng: thuốc - thức ăn - hoa
+  habits?: HabitsHistory; // Thói quen: hạn chế vận động, tập ít <30'/tuần hoặc 5'/ngày, ăn dầu mỡ, ăn chay, ăn muối, rượu bia/năm, ít uống nước, ngồi nhiều >6h/ngày
+  familyHistory?: string; // Gia đình: Mắc bệnh lý tương tự không
+  preliminaryDiagnosis?: string; // Chẩn đoán trước khi có cận lâm sàng là: ...?
+  clinicalFindings: {
+    postureInspection: string; // Quan sát tư thế
+    palpationSpasm: string; // Điểm đau & co thắt cơ
+    rangeOfMotion: string; // Tầm vận động (ROM)
+    specialTests: string; // Nghiệm pháp chuyên khoa (Spurling, Lasegue, Phalen...)
+    neurological: string; // Phản xạ gân xương, cảm giác, vận động
+  };
+  paraclinical: {
+    xrayFindings?: string; // Hình ảnh X-quang
+    mriFindings?: string; // Hình ảnh MRI
+    ultrasoundFindings?: string; // Siêu âm khớp / gân
+  };
+  diagnosis: string; // Chẩn đoán xác định chuẩn Y khoa
+  recommendedProtocol: string; // Phác đồ điều trị vật lý trị liệu chuẩn
+  modalities: string[]; // Máy móc & kỹ thuật can thiệp
+  suggestedSessions: number; // Số buổi chuẩn
+  revisitMilestones: string; // Lịch khám nhắc & mốc đánh giá lại
+  doctorAdvice: string; // Lời dặn dò y khoa chuẩn
+  dailyChecklistTasks: {
+    task: string;
+    timeOfDay: 'Sáng' | 'Trưa' | 'Chiều' | 'Tối' | 'Cả ngày';
+    category: 'exercise' | 'posture' | 'diet' | 'warning' | 'rest';
+    note?: string;
+  }[];
+  assignedExerciseIds: string[]; // Bài tập phục hồi chức năng chuẩn
+  avatarType?: string; // Ảnh minh họa phù hợp
+}
+
 export interface Appointment {
   id: string;
   patientId?: string;
@@ -101,6 +150,36 @@ export interface DailyChecklistItem {
   category: 'exercise' | 'posture' | 'diet' | 'warning' | 'rest';
   isCompleted: boolean;
   note?: string;
+  sourceType?: 'homework_exercise' | 'doctor_advice' | 'standard'; // Phân loại nguồn tạo: Bài tập về nhà hoặc Lời dặn Bác sĩ
+  sourceExerciseId?: string; // Mã bài tập nếu tạo từ bài tập về nhà
+  sourceAdviceSnippet?: string; // Đoạn dặn dò gốc của Bác sĩ
+}
+
+export interface PastMedicalHistory {
+  hypertension: boolean; // Tăng huyết áp
+  diabetes: boolean; // Đái tháo đường
+  otherDisease: string; // Bệnh nội khoa khác
+  diagnosedAt: string; // Được chẩn đoán tại đâu
+  currentMedications: string; // Đang điều trị thuốc gì?
+}
+
+export interface AllergiesHistory {
+  drug: string; // Dị ứng thuốc
+  food: string; // Dị ứng thức ăn
+  flower: string; // Dị ứng hoa / phấn hoa
+  other?: string; // Dị nguyên khác
+}
+
+export interface HabitsHistory {
+  exerciseLimited: boolean; // Hạn chế vận động
+  exerciseFreq: string; // Tập vận động nhưng ít dưới 30'/tuần hoặc 5'/ngày
+  greasyFood: boolean; // Ăn nhiều dầu mỡ
+  vegetarian: boolean; // Ăn chay
+  highSalt: boolean; // Ăn nhiều muối
+  alcohol: string; // Uống nhiều rượu bia (bao nhiêu trên năm)
+  lowWater: boolean; // Ít uống nước
+  sedentaryJob: boolean; // Tính chất công việc ngồi nhiều trên 6 tiếng/ngày
+  notes?: string;
 }
 
 export interface Patient {
@@ -132,34 +211,16 @@ export interface Patient {
   doctorAdvice?: string; // Lời dặn dò quan trọng từ Bác sĩ
   dailyChecklist?: DailyChecklistItem[]; // Danh sách việc người bệnh cần làm mỗi ngày
   firstVisitDateTime?: string; // Ngày khám đầu tiên trong EMR
-  occupation?: string;
-  chiefComplaint?: string;
-  presentIllness?: string;
-  pastMedicalHistory?: {
-    hypertension: boolean;
-    diabetes: boolean;
-    otherDisease: string;
-    diagnosedAt: string;
-    currentMedications: string;
-  };
-  surgicalHistory?: string;
-  allergies?: {
-    drug: string;
-    food: string;
-    other: string;
-  };
-  habits?: {
-    exerciseLimited: boolean;
-    exerciseFreq: string;
-    greasyFood: boolean;
-    vegetarian: boolean;
-    highSalt: boolean;
-    alcohol: string;
-    lowWater: boolean;
-    sedentaryJob: boolean;
-  };
-  familyHistory?: string;
-  preliminaryDiagnosis?: string;
+  address?: string; // Địa chỉ liên hệ
+  occupation?: string; // Nghề nghiệp
+  chiefComplaint?: string; // Lý do đến khám
+  presentIllness?: string; // Bệnh sử của bệnh nhân
+  pastMedicalHistory?: PastMedicalHistory; // Tiền căn nội khoa
+  surgicalHistory?: string; // Ngoại khoa: phẫu thuật can thiệp gì hay không
+  allergies?: AllergiesHistory; // Dị ứng: thuốc - thức ăn - hoa
+  habits?: HabitsHistory; // Thói quen sinh hoạt & tính chất công việc
+  familyHistory?: string; // Gia đình: mắc bệnh lý tương tự không
+  preliminaryDiagnosis?: string; // Chẩn đoán trước khi có cận lâm sàng là: ...?
   dietPlan?: DietDay[];
   healthMetrics: HealthMetric[];
   assignedExercises?: string[];
