@@ -36,9 +36,8 @@ import {
   Clock,
   Eye,
   Trash2,
-  BookOpen,
+  Cloud,
 } from 'lucide-react';
-import { STANDARD_EMR_TEMPLATES } from '../data/standardEMRData';
 import { exportBothExcelAndJson } from '../utils/exportUtils';
 import {
   getLastAutoExportTime,
@@ -70,6 +69,8 @@ interface MasterDataPoolTabProps {
   warranties: WarrantyRecord[];
   setWarranties: React.Dispatch<React.SetStateAction<WarrantyRecord[]>>;
   showToast: (msg: string) => void;
+  onOpenSupabaseModal?: () => void;
+  isSupabaseConnected?: boolean;
 }
 
 export const MasterDataPoolTab: React.FC<MasterDataPoolTabProps> = ({
@@ -95,6 +96,8 @@ export const MasterDataPoolTab: React.FC<MasterDataPoolTabProps> = ({
   warranties,
   setWarranties,
   showToast,
+  onOpenSupabaseModal,
+  isSupabaseConnected = false,
 }) => {
   const [selectedEntity, setSelectedEntity] = useState<string>('patients');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -386,15 +389,6 @@ export const MasterDataPoolTab: React.FC<MasterDataPoolTabProps> = ({
             w.packageName.toLowerCase().includes(term) ||
             w.phone.includes(term)
         );
-      case 'emr_standards':
-        return STANDARD_EMR_TEMPLATES.filter(
-          (s) =>
-            !term ||
-            s.title.toLowerCase().includes(term) ||
-            s.shortDiagnosis.toLowerCase().includes(term) ||
-            s.icd10.toLowerCase().includes(term) ||
-            s.bodyPart.toLowerCase().includes(term)
-        );
       default:
         return [];
     }
@@ -498,6 +492,45 @@ export const MasterDataPoolTab: React.FC<MasterDataPoolTabProps> = ({
         </div>
       </div>
 
+      {/* Supabase Cloud Database Integration Banner */}
+      <div className="bg-gradient-to-r from-teal-900 via-emerald-950 to-slate-900 rounded-3xl p-5 lg:p-6 text-white border border-teal-800/60 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start space-x-3.5">
+          <div className="p-3 bg-teal-500/20 border border-teal-400/30 rounded-2xl flex-shrink-0 text-emerald-300">
+            <Cloud className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-extrabold text-white">
+                Cơ Sở Dữ Liệu Chung Supabase Cloud (Đa Thiết Bị)
+              </h3>
+              <span
+                className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                  isSupabaseConnected
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-400/40'
+                }`}
+              >
+                {isSupabaseConnected ? '● Đang đồng bộ Realtime' : 'Chưa cấu hình API Key'}
+              </span>
+            </div>
+            <p className="text-xs text-teal-100 max-w-2xl leading-relaxed">
+              Giải quyết triệt để vấn đề "Máy này tạo bệnh nhân nhưng máy khác không nhìn thấy". Khi kết nối Supabase, mọi lượt tạo mới/cập nhật sẽ lập tức lưu lên đám mây và phát tín hiệu Realtime cho tất cả các máy tính phòng khám.
+            </p>
+          </div>
+        </div>
+
+        {onOpenSupabaseModal && (
+          <button
+            type="button"
+            onClick={onOpenSupabaseModal}
+            className="flex-shrink-0 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/30 transition flex items-center justify-center gap-2"
+          >
+            <Cloud className="w-4 h-4" />
+            <span>{isSupabaseConnected ? 'Cài Đặt & Đồng Bộ Cloud' : 'Cấu Hình Supabase Ngay'}</span>
+          </button>
+        )}
+      </div>
+
       {/* Grid of Data Entities in Master Pool */}
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -510,10 +543,9 @@ export const MasterDataPoolTab: React.FC<MasterDataPoolTabProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
             { id: 'patients', label: 'Bệnh Nhân & EMR', count: patients.length, icon: Users, color: 'blue' },
-            { id: 'emr_standards', label: 'Chuẩn Bệnh Án', count: STANDARD_EMR_TEMPLATES.length, icon: BookOpen, color: 'indigo' },
             { id: 'treatments', label: 'Liệu Trình', count: treatments.length, icon: Layers, color: 'indigo' },
             { id: 'appointments', label: 'Lịch Hẹn Khám', count: appointments.length, icon: Calendar, color: 'cyan' },
             { id: 'invoices', label: 'Hóa Đơn Thu', count: invoices.length, icon: CreditCard, color: 'emerald' },

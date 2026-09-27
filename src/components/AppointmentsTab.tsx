@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { uid } from '../data/seedData';
 import { getAppointmentMinutesUntil } from '../utils/appointmentNotificationManager';
+import { ConfirmModal } from './ConfirmModal';
 
 interface AppointmentsTabProps {
   appointments: Appointment[];
@@ -50,6 +51,7 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
   const [sourceFilter, setSourceFilter] = useState<'all' | 'emr' | 'manual'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [apptToDelete, setApptToDelete] = useState<Appointment | null>(null);
 
   // Form state
   const [patientId, setPatientId] = useState('');
@@ -554,13 +556,9 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm(`Xóa lịch hẹn của ${appt.patientName}?`)) {
-                              onDeleteAppointment(appt.id);
-                            }
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition"
-                          title="Xóa"
+                          onClick={() => setApptToDelete(appt)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
+                          title="Xóa lịch hẹn"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -786,6 +784,33 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
             </form>
           </div>
         </div>
+      )}
+      {/* Modal Xác Nhận Xóa Lịch Hẹn */}
+      {apptToDelete && (
+        <ConfirmModal
+          isOpen={!!apptToDelete}
+          onClose={() => setApptToDelete(null)}
+          onConfirm={() => {
+            onDeleteAppointment(apptToDelete.id);
+            setApptToDelete(null);
+          }}
+          title="Xác Nhận Xóa Lịch Hẹn"
+          confirmText="Xóa Lịch Hẹn"
+          variant="danger"
+          icon="trash"
+          message={
+            <div>
+              <p>
+                Bạn có chắc chắn muốn xóa lịch hẹn của bệnh nhân{' '}
+                <strong>{apptToDelete.patientName}</strong> vào lúc{' '}
+                <strong>{apptToDelete.time}</strong>?
+              </p>
+              <p className="mt-1 text-slate-500 text-[11px]">
+                Dịch vụ: {apptToDelete.service || 'Khám & Điều trị'} • BS: {apptToDelete.doctor}
+              </p>
+            </div>
+          }
+        />
       )}
     </div>
   );

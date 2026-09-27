@@ -24,6 +24,7 @@ import {
   Award,
 } from 'lucide-react';
 import { uid, PROTOCOL_TEMPLATES } from '../data/seedData';
+import { ConfirmModal } from './ConfirmModal';
 
 interface TreatmentsTabProps {
   treatments: Treatment[];
@@ -61,6 +62,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [scheduleModalTreatment, setScheduleModalTreatment] = useState<Treatment | null>(null);
   const [warrantyModalTreatment, setWarrantyModalTreatment] = useState<Treatment | null>(null);
+  const [treatmentToDelete, setTreatmentToDelete] = useState<Treatment | null>(null);
 
   // Form state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -634,13 +636,9 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                           {/* Delete */}
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm(`Xóa liệu trình ${t.id} của ${t.patientName}?`)) {
-                                onDeleteTreatment(t.id);
-                              }
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition"
-                            title="Xóa"
+                            onClick={() => setTreatmentToDelete(t)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
+                            title="Xóa liệu trình"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -963,6 +961,33 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
               onConvertToWarranty(warrantyModalTreatment, warranty, autoAppt, firstDate);
             }
           }}
+        />
+      )}
+      {/* Modal Xác Nhận Xóa Liệu Trình */}
+      {treatmentToDelete && (
+        <ConfirmModal
+          isOpen={!!treatmentToDelete}
+          onClose={() => setTreatmentToDelete(null)}
+          onConfirm={() => {
+            onDeleteTreatment(treatmentToDelete.id);
+            setTreatmentToDelete(null);
+          }}
+          title="Xác Nhận Xóa Liệu Trình"
+          confirmText="Xóa Liệu Trình"
+          variant="danger"
+          icon="trash"
+          message={
+            <div>
+              <p>
+                Bạn có chắc chắn muốn xóa liệu trình{' '}
+                <strong>{treatmentToDelete.id}</strong> của bệnh nhân{' '}
+                <strong>{treatmentToDelete.patientName}</strong>?
+              </p>
+              <p className="mt-1 text-slate-500 text-[11px]">
+                Vùng: {treatmentToDelete.bodyPart} • Phác đồ: {treatmentToDelete.plan} • Tiến độ: {treatmentToDelete.done}/{treatmentToDelete.total} buổi
+              </p>
+            </div>
+          }
         />
       )}
     </div>

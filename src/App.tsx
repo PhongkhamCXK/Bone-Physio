@@ -12,7 +12,6 @@ import {
   Expense,
   TaxConfig,
   WarrantyRecord,
-  StandardEMRTemplate,
 } from './types';
 import {
   INITIAL_PATIENTS,
@@ -25,8 +24,6 @@ import {
   INITIAL_EXPENSES,
   INITIAL_WARRANTIES,
   uid,
-  PATIENT_CLINICAL_HISTORIES,
-  getDefaultClinicalDetails,
 } from './data/seedData';
 import { exportBothExcelAndJson } from './utils/exportUtils';
 import { DEFAULT_TAX_CONFIG } from './utils/taxCalculation';
@@ -50,12 +47,45 @@ import { CustomerCareTab } from './components/CustomerCareTab';
 import { PatientPortalTab } from './components/PatientPortalTab';
 import { WarrantyTab } from './components/WarrantyTab';
 import { MasterDataPoolTab } from './components/MasterDataPoolTab';
-import { StandardEMRTab } from './components/StandardEMRTab';
 import { EMRDetailModal } from './components/EMRDetailModal';
 import { LoginModal, LoginPage } from './components/LoginModal';
 import { CheckInOutModal } from './components/CheckInOutModal';
 import { ImportModal } from './components/ImportModal';
 import { UpcomingAppointmentToast } from './components/UpcomingAppointmentToast';
+import { SupabaseConfigModal } from './components/SupabaseConfigModal';
+import { AlertCircle, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import {
+  getSupabaseConfig,
+  supabaseFetchAllData,
+  supabaseSavePatient,
+  supabaseDeletePatient,
+  supabaseSaveAppointment,
+  supabaseDeleteAppointment,
+  supabaseSaveTreatment,
+  supabaseDeleteTreatment,
+  supabaseSaveStaff,
+  supabaseDeleteStaff,
+  supabaseSaveTechnician,
+  supabaseDeleteTechnician,
+  supabaseSaveInvoice,
+  supabaseDeleteInvoice,
+  supabaseSaveExpense,
+  supabaseDeleteExpense,
+  supabaseSaveWarranty,
+  supabaseDeleteWarranty,
+  supabaseSaveExercise,
+  supabaseDeleteExercise,
+  supabaseSaveTaxConfig,
+  subscribeToSupabaseRealtime,
+  subscribeToSyncStatus,
+  parsePatientRow,
+  parseAppointmentRow,
+  parseTreatmentRow,
+  parseStaffRow,
+  parseInvoiceRow,
+  parseWarrantyRow,
+  SyncResult,
+} from './services/supabaseClient';
 import {
   UpcomingAppointmentNotice,
   getUpcomingAppointments,
@@ -66,35 +96,8 @@ import { mergeData } from './utils/importUtils';
 
 export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
   return pts.map((p) => {
-    const updated: Patient = { ...p };
-    const clinical =
-      PATIENT_CLINICAL_HISTORIES[p.id] ||
-      getDefaultClinicalDetails(p.bodyPart, p.occupation);
-
-    if (!updated.pastMedicalHistory) {
-      updated.pastMedicalHistory = clinical.pastMedicalHistory;
-    }
-    if (!updated.surgicalHistory) {
-      updated.surgicalHistory = clinical.surgicalHistory;
-    }
-    if (!updated.allergies) {
-      updated.allergies = clinical.allergies;
-    }
-    if (!updated.habits) {
-      updated.habits = clinical.habits;
-    }
-    if (!updated.familyHistory) {
-      updated.familyHistory = clinical.familyHistory;
-    }
-    if (!updated.preliminaryDiagnosis) {
-      updated.preliminaryDiagnosis = clinical.preliminaryDiagnosis;
-    }
-    if (!updated.presentIllness) {
-      updated.presentIllness = clinical.presentIllness || updated.history;
-    }
-
-    if (!updated.assignedExercises || updated.assignedExercises.length === 0) {
-      const bpLower = (updated.bodyPart || '').toLowerCase();
+    if (!p.assignedExercises || p.assignedExercises.length === 0) {
+      const bpLower = (p.bodyPart || '').toLowerCase();
       let defaultExIds: string[] = [];
       if (bpLower.includes('cổ') || bpLower.includes('vai') || bpLower.includes('gáy')) {
         defaultExIds = ['EX001', 'EX002', 'EX003'];
@@ -103,9 +106,9 @@ export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
       } else {
         defaultExIds = ['EX004', 'EX005', 'EX006'];
       }
-      updated.assignedExercises = defaultExIds;
+      return { ...p, assignedExercises: defaultExIds };
     }
-    return updated;
+    return p;
   });
 };
 
@@ -117,13 +120,6 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const existingIds = new Set(parsed.map((p: any) => p.id));
-          const missingSeed = INITIAL_PATIENTS.filter((ip) => !existingIds.has(ip.id));
-          if (missingSeed.length > 0) {
-            const merged = [...parsed, ...missingSeed];
-            localStorage.setItem('bp_patients', JSON.stringify(merged));
-            return ensurePatientExercises(merged);
-          }
           return ensurePatientExercises(parsed);
         }
       } catch {
@@ -135,24 +131,7 @@ export default function App() {
 
   const [treatments, setTreatments] = useState<Treatment[]>(() => {
     const saved = localStorage.getItem('bp_treatments');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const existingIds = new Set(parsed.map((t: any) => t.id));
-          const missingSeed = INITIAL_TREATMENTS.filter((it) => !existingIds.has(it.id));
-          if (missingSeed.length > 0) {
-            const merged = [...parsed, ...missingSeed];
-            localStorage.setItem('bp_treatments', JSON.stringify(merged));
-            return merged;
-          }
-          return parsed;
-        }
-      } catch {
-        // fallback
-      }
-    }
-    return INITIAL_TREATMENTS;
+    return saved ? JSON.parse(saved) : INITIAL_TREATMENTS;
   });
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
@@ -220,7 +199,17 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isCheckInOutModalOpen, setIsCheckInOutModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(() => {
+    return getSupabaseConfig().isConfigured;
+  });
+  const [toast, setToast] = useState<{
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    details?: string;
+  } | null>(null);
+  const toastMessage = toast?.message || null;
 
   // UPCOMING APPOINTMENTS NOTIFICATION STATE (Trong vòng 45 phút tới)
   const [upcomingNotices, setUpcomingNotices] = useState<UpcomingAppointmentNotice[]>([]);
@@ -350,13 +339,174 @@ export default function App() {
     }
   }, []);
 
+  // ĐỒNG BỘ CƠ SỞ DỮ LIỆU CHUNG TỪ SUPABASE CLOUD & LẮNG NGHE REALTIME
+  // Giải quyết nguyên nhân: Máy này tạo nhưng máy khác không nhìn thấy do chưa đọc/ghi từ Supabase
+  useEffect(() => {
+    let isMounted = true;
+    const cfg = getSupabaseConfig();
+
+    if (cfg.isConfigured) {
+      setIsSupabaseConnected(true);
+
+      // 1. Tự động kéo dữ liệu mới nhất từ Supabase Cloud khi mở ứng dụng
+      supabaseFetchAllData()
+        .then((cloudData) => {
+          if (!isMounted) return;
+          let hasCloudRecords = false;
+
+          if (cloudData.patients && cloudData.patients.length > 0) {
+            setPatients(ensurePatientExercises(cloudData.patients));
+            hasCloudRecords = true;
+          }
+          if (cloudData.treatments && cloudData.treatments.length > 0) {
+            setTreatments(cloudData.treatments);
+            hasCloudRecords = true;
+          }
+          if (cloudData.appointments && cloudData.appointments.length > 0) {
+            setAppointments(cloudData.appointments);
+            hasCloudRecords = true;
+          }
+          if (cloudData.staffList && cloudData.staffList.length > 0) {
+            setStaffList(cloudData.staffList);
+          }
+          if (cloudData.technicians && cloudData.technicians.length > 0) {
+            setTechnicians(cloudData.technicians);
+          }
+          if (cloudData.invoices && cloudData.invoices.length > 0) {
+            setInvoices(cloudData.invoices);
+          }
+          if (cloudData.expenses && cloudData.expenses.length > 0) {
+            setExpenses(cloudData.expenses);
+          }
+          if (cloudData.warranties && cloudData.warranties.length > 0) {
+            setWarranties(cloudData.warranties);
+          }
+          if (cloudData.exercises && cloudData.exercises.length > 0) {
+            setExercises(cloudData.exercises);
+          }
+          if (cloudData.taxConfig) {
+            setTaxConfig(cloudData.taxConfig);
+          }
+
+          if (hasCloudRecords) {
+            showToast('☁️ Đã đồng bộ thành công dữ liệu dùng chung từ Supabase Cloud!');
+          }
+        })
+        .catch((err) => {
+          console.warn('Lỗi đồng bộ Supabase ban đầu:', err);
+        });
+
+      // 2. Kích hoạt Supabase Realtime: Khi máy khác tạo/sửa hồ sơ, máy này cập nhật ngay!
+      const unsubscribe = subscribeToSupabaseRealtime({
+        onPatientChange: (eventType, row) => {
+          if (!isMounted) return;
+          const p = parsePatientRow(row);
+          if (eventType === 'INSERT') {
+            setPatients((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]));
+            showToast(`⚡ [Realtime] Máy khác vừa tạo hồ sơ BN: ${p.name}`);
+          } else if (eventType === 'UPDATE') {
+            setPatients((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+            if (selectedEMRPatient?.id === p.id) {
+              setSelectedEMRPatient(p);
+            }
+          } else if (eventType === 'DELETE') {
+            setPatients((prev) => prev.filter((x) => x.id !== row.id));
+          }
+        },
+        onAppointmentChange: (eventType, row) => {
+          if (!isMounted) return;
+          const a = parseAppointmentRow(row);
+          if (eventType === 'INSERT') {
+            setAppointments((prev) => (prev.some((x) => x.id === a.id) ? prev : [a, ...prev]));
+            showToast(`⚡ [Realtime] Máy khác vừa tạo lịch hẹn: ${a.patientName}`);
+          } else if (eventType === 'UPDATE') {
+            setAppointments((prev) => prev.map((x) => (x.id === a.id ? a : x)));
+          } else if (eventType === 'DELETE') {
+            setAppointments((prev) => prev.filter((x) => x.id !== row.id));
+          }
+        },
+        onTreatmentChange: (eventType, row) => {
+          if (!isMounted) return;
+          const t = parseTreatmentRow(row);
+          if (eventType === 'INSERT') {
+            setTreatments((prev) => (prev.some((x) => x.id === t.id) ? prev : [t, ...prev]));
+          } else if (eventType === 'UPDATE') {
+            setTreatments((prev) => prev.map((x) => (x.id === t.id ? t : x)));
+          } else if (eventType === 'DELETE') {
+            setTreatments((prev) => prev.filter((x) => x.id !== row.id));
+          }
+        },
+        onStaffChange: (eventType, row) => {
+          if (!isMounted) return;
+          const s = parseStaffRow(row);
+          if (eventType === 'INSERT') {
+            setStaffList((prev) => (prev.some((x) => x.id === s.id) ? prev : [s, ...prev]));
+            showToast(`⚡ [Realtime] Máy khác vừa tạo tài khoản nhân viên: ${s.name}`);
+          } else if (eventType === 'UPDATE') {
+            setStaffList((prev) => prev.map((x) => (x.id === s.id ? s : x)));
+          } else if (eventType === 'DELETE') {
+            setStaffList((prev) => prev.filter((x) => x.id !== row.id));
+          }
+        },
+        onInvoiceChange: (eventType, row) => {
+          if (!isMounted) return;
+          const inv = parseInvoiceRow(row);
+          if (eventType === 'INSERT') {
+            setInvoices((prev) => (prev.some((x) => x.id === inv.id) ? prev : [inv, ...prev]));
+          } else if (eventType === 'UPDATE') {
+            setInvoices((prev) => prev.map((x) => (x.id === inv.id ? inv : x)));
+          } else if (eventType === 'DELETE') {
+            setInvoices((prev) => prev.filter((x) => x.id !== row.id));
+          }
+        },
+        onWarrantyChange: (eventType, row) => {
+          if (!isMounted) return;
+          const w = parseWarrantyRow(row);
+          if (eventType === 'INSERT') {
+            setWarranties((prev) => (prev.some((x) => x.id === w.id) ? prev : [w, ...prev]));
+          } else if (eventType === 'UPDATE') {
+            setWarranties((prev) => prev.map((x) => (x.id === w.id ? w : x)));
+          } else if (eventType === 'DELETE') {
+            setWarranties((prev) => prev.filter((x) => x.id !== row.id));
+          }
+        },
+      });
+
+      return () => {
+        isMounted = false;
+        unsubscribe();
+      };
+    } else {
+      setIsSupabaseConnected(false);
+    }
+  }, []);
+
   // Toast notification helper
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
+  const showToast = (
+    msg: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info',
+    details?: string
+  ) => {
+    const id = Date.now().toString() + Math.random().toString(36).slice(2, 6);
+    setToast({ id, message: msg, type, details });
     setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
+      setToast((prev) => (prev?.id === id ? null : prev));
+    }, type === 'error' ? 6500 : 4000);
   };
+
+  // LẮNG NGHE TRẠNG THÁI ĐỒNG BỘ SUPABASE VÀ THÔNG BÁO NGAY NẾU CÓ LỖI
+  useEffect(() => {
+    const unsubscribe = subscribeToSyncStatus((event) => {
+      if (!event.success) {
+        showToast(
+          `⚠️ [Lỗi Supabase] Thao tác ${event.action === 'delete' ? 'xóa' : 'lưu'} trên bảng "${event.table}" thất bại: ${event.error || 'Không thể đồng bộ lên mây'}`,
+          'error',
+          event.error
+        );
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   // 24H AUTOMATED EXPORT ENGINE (EXCEL + JSON CỨ SAU MỖI 24H VỚI TÊN NGÀY-THÁNG-NĂM-GIỜ)
   // YÊU CẦU CỐT LÕI: "chỉ tự động tải về khi admin đã đăng nhập"
@@ -481,10 +631,43 @@ export default function App() {
     }
   };
 
+  // Helper xử lý đồng bộ Supabase tập trung: Báo lỗi ngay lập tức nếu thao tác thất bại
+  const handleSyncResult = (
+    promise: Promise<SyncResult>,
+    actionName: string,
+    entityName?: string,
+    showSuccessToast: boolean = false
+  ) => {
+    promise
+      .then((res) => {
+        if (!res.success) {
+          showToast(
+            `⚠️ [Lỗi Supabase] ${actionName}${entityName ? ` "${entityName}"` : ''} thất bại: ${res.error || 'Không thể đồng bộ lên mây'}`,
+            'error',
+            res.error
+          );
+        } else if (showSuccessToast) {
+          showToast(
+            `☁️ [Supabase] ${actionName}${entityName ? ` "${entityName}"` : ''} thành công!`,
+            'success'
+          );
+        }
+      })
+      .catch((err) => {
+        showToast(
+          `⚠️ [Lỗi Supabase] Ngoại lệ khi ${actionName.toLowerCase()}${entityName ? ` "${entityName}"` : ''}: ${err?.message || err}`,
+          'error'
+        );
+      });
+  };
+
   // Patient handlers
   const handleAddPatient = (patient: Patient) => {
     setPatients((prev) => [patient, ...prev]);
-    showToast(`Đã thêm hồ sơ bệnh nhân ${patient.name} (${patient.id})`);
+    showToast(`Đã thêm hồ sơ bệnh nhân ${patient.name} (${patient.id})`, 'info');
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSavePatient(patient), 'Lưu bệnh nhân', patient.name, true);
+    }
   };
 
   const handleUpdatePatient = (patient: Patient) => {
@@ -492,73 +675,59 @@ export default function App() {
     if (selectedEMRPatient?.id === patient.id) {
       setSelectedEMRPatient(patient);
     }
-    showToast(`Đã cập nhật hồ sơ bệnh nhân ${patient.name}`);
-  };
-
-  const handleDeletePatient = (id: string) => {
-    setPatients((prev) => prev.filter((p) => p.id !== id));
-    showToast('Đã xóa bệnh nhân khỏi danh sách.');
-  };
-
-  const handleCreatePatientFromStandard = (template: StandardEMRTemplate) => {
-    const newId = `BN${String(patients.length + 1).padStart(3, '0')}`;
-    let parsedAge = 35;
-    if (template.typicalAgeGroup.includes('-')) {
-      const match = template.typicalAgeGroup.match(/(\d+)/);
-      if (match) parsedAge = parseInt(match[1]);
+    showToast(`Đã cập nhật hồ sơ bệnh nhân ${patient.name}`, 'info');
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSavePatient(patient), 'Cập nhật bệnh nhân', patient.name);
     }
-    const d = new Date();
-    d.setDate(d.getDate() + 3);
-    const newPt: Patient = {
-      id: newId,
-      name: 'Bệnh Nhân - ' + template.shortDiagnosis.slice(0, 30),
-      age: parsedAge,
-      gender:
-        template.typicalAgeGroup.includes('ông') || template.typicalAgeGroup.includes('Bác')
-          ? 'Nam'
-          : 'Nữ',
-      phone: '09' + Math.floor(10000000 + Math.random() * 90000000),
-      password: '123',
-      bodyPart: template.bodyPart,
-      diagnosis: template.diagnosis,
-      occupation: template.category,
-      chiefComplaint: template.chiefComplaint,
-      history: template.history,
-      firstVisitDateTime: new Date().toISOString().slice(0, 16),
-      nextRevisitDate: d.toISOString().split('T')[0],
-      revisitNotes: template.revisitMilestones,
-      revisitDoctor: 'BS. CKII Hoàng Minh',
-      doctorAdvice: template.doctorAdvice,
-      assignedExercises: template.assignedExerciseIds,
-      avatarType: template.avatarType || 'office_posture',
-      dailyChecklist: template.dailyChecklistTasks.map((t, idx) => ({
-        id: `cl_std_${Date.now()}_${idx}`,
-        task: t.task,
-        timeOfDay: t.timeOfDay,
-        category: t.category,
-        isCompleted: false,
-        note: t.note,
-      })),
-      healthMetrics: [
-        {
-          id: uid('HM'),
-          date: new Date().toISOString().split('T')[0],
-          painScore: 5,
-          rangeOfMotion: template.clinicalFindings.rangeOfMotion,
-          bloodPressure: '120/80 mmHg',
-          notes: 'Khám theo chuẩn EMR ' + template.code,
-        },
-      ],
-      additionalRegions: [],
-    };
-    setPatients((prev) => [newPt, ...prev]);
-    setSelectedEMRPatient(newPt);
-    showToast(`Đã tạo hồ sơ bệnh nhân ${newPt.id} từ Chuẩn Bệnh Án "${template.shortDiagnosis}"!`);
+  };
+
+  const handleDeletePatient = (id: string, deleteRelatedData: boolean = true) => {
+    const patientToDelete = patients.find((p) => p.id === id);
+    const patientName = patientToDelete?.name;
+
+    // 1. Xóa khỏi danh sách bệnh nhân
+    setPatients((prev) => prev.filter((p) => p.id !== id));
+
+    // 2. Đóng EMR modal nếu đang mở đúng bệnh nhân này
+    if (selectedEMRPatient?.id === id) {
+      setSelectedEMRPatient(null);
+    }
+
+    // 3. Xóa dữ liệu liên quan nếu được chọn
+    if (deleteRelatedData) {
+      setTreatments((prev) =>
+        prev.filter((t) => t.patientId !== id && (!patientName || t.patientName !== patientName))
+      );
+      setAppointments((prev) =>
+        prev.filter((a) => a.patientId !== id && (!patientName || a.patientName !== patientName))
+      );
+      setWarranties((prev) =>
+        prev.filter((w) => w.patientId !== id && (!patientName || w.patientName !== patientName))
+      );
+      setInvoices((prev) =>
+        prev.filter((inv) => inv.patientId !== id && (!patientName || inv.patientName !== patientName))
+      );
+    }
+
+    showToast(`Đã xóa bệnh nhân ${patientName || id} thành công.`, 'info');
+
+    // 4. Đồng bộ xóa lên Supabase Cloud
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(
+        supabaseDeletePatient(id, deleteRelatedData),
+        'Xóa bệnh nhân',
+        patientName || id,
+        true
+      );
+    }
   };
 
   // Treatment handlers
   const handleAddTreatment = (treatment: Treatment, autoCreateAppointment: boolean = true) => {
     setTreatments((prev) => [treatment, ...prev]);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTreatment(treatment), 'Lưu liệu trình', treatment.patientName);
+    }
 
     const revisitDateVal = treatment.revisitDate || treatment.followup;
     const matchedPatient = patients.find(
@@ -581,6 +750,9 @@ export default function App() {
             };
             if (selectedEMRPatient?.id === p.id) {
               setSelectedEMRPatient(updatedPatient);
+            }
+            if (getSupabaseConfig().isConfigured) {
+              handleSyncResult(supabaseSavePatient(updatedPatient), 'Đồng bộ EMR khám nhắc', updatedPatient.name);
             }
             return updatedPatient;
           }
@@ -614,6 +786,9 @@ export default function App() {
           emrDate: revisitDateVal,
         };
         setAppointments((prev) => [newAppt, ...prev]);
+        if (getSupabaseConfig().isConfigured) {
+          handleSyncResult(supabaseSaveAppointment(newAppt), 'Lên lịch hẹn khám nhắc', newAppt.patientName);
+        }
       }
     }
 
@@ -624,6 +799,9 @@ export default function App() {
 
   const handleUpdateTreatment = (treatment: Treatment, syncPatient: boolean = true) => {
     setTreatments((prev) => prev.map((t) => (t.id === treatment.id ? treatment : t)));
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTreatment(treatment), 'Cập nhật liệu trình', treatment.patientName);
+    }
 
     const revisitDateVal = treatment.revisitDate || treatment.followup;
     if (syncPatient && revisitDateVal && (treatment.patientId || treatment.patientName)) {
@@ -642,6 +820,9 @@ export default function App() {
             if (selectedEMRPatient?.id === p.id) {
               setSelectedEMRPatient(updatedPatient);
             }
+            if (getSupabaseConfig().isConfigured) {
+              handleSyncResult(supabaseSavePatient(updatedPatient), 'Cập nhật EMR khám nhắc', updatedPatient.name);
+            }
             return updatedPatient;
           }
           return p;
@@ -655,22 +836,34 @@ export default function App() {
   const handleDeleteTreatment = (id: string) => {
     setTreatments((prev) => prev.filter((t) => t.id !== id));
     showToast('Đã xóa liệu trình.');
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteTreatment(id), 'Xóa liệu trình', id);
+    }
   };
 
   // WARRANTY MANAGEMENT HANDLERS
   const handleAddWarranty = (w: WarrantyRecord) => {
     setWarranties((prev) => [w, ...prev]);
     showToast(`Đã kích hoạt thành công Gói Bảo Hành cho ${w.patientName}!`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveWarranty(w), 'Kích hoạt bảo hành', w.patientName);
+    }
   };
 
   const handleUpdateWarranty = (w: WarrantyRecord) => {
     setWarranties((prev) => prev.map((item) => (item.id === w.id ? w : item)));
     showToast(`Đã cập nhật hợp đồng bảo hành ${w.id}!`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveWarranty(w), 'Cập nhật bảo hành', w.patientName);
+    }
   };
 
   const handleDeleteWarranty = (id: string) => {
     setWarranties((prev) => prev.filter((item) => item.id !== id));
     showToast('Đã xóa hợp đồng bảo hành.');
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteWarranty(id), 'Xóa bảo hành', id);
+    }
   };
 
   // Transition from completed Treatment to Warranty Package
@@ -682,20 +875,23 @@ export default function App() {
   ) => {
     // 1. Add warranty record
     setWarranties((prev) => [warranty, ...prev]);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveWarranty(warranty), 'Kích hoạt gói bảo hành', warranty.patientName);
+    }
 
     // 2. Mark treatment completed and link warranty
+    const updatedTreatment: Treatment = {
+      ...treatment,
+      status: 'Hoàn thành',
+      warrantyId: warranty.id,
+      done: Math.max(treatment.done, treatment.total),
+    };
     setTreatments((prev) =>
-      prev.map((t) =>
-        t.id === treatment.id
-          ? {
-              ...t,
-              status: 'Hoàn thành',
-              warrantyId: warranty.id,
-              done: Math.max(t.done, t.total),
-            }
-          : t
-      )
+      prev.map((t) => (t.id === treatment.id ? updatedTreatment : t))
     );
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTreatment(updatedTreatment), 'Hoàn thành liệu trình', updatedTreatment.patientName);
+    }
 
     // 3. Auto schedule first maintenance session if requested
     if (autoCreateAppointment && firstApptDate) {
@@ -712,6 +908,9 @@ export default function App() {
         notes: `Buổi bảo dưỡng định kỳ lần 1 theo hợp đồng ${warranty.id}. Vùng: ${warranty.bodyPart}`,
       };
       setAppointments((prev) => [...prev, newAppt]);
+      if (getSupabaseConfig().isConfigured) {
+        handleSyncResult(supabaseSaveAppointment(newAppt), 'Đặt lịch bảo dưỡng định kỳ', newAppt.patientName);
+      }
     }
 
     showToast(
@@ -723,6 +922,9 @@ export default function App() {
   // KEY REQUIREMENT 2: EMR "Add new region" -> automatically adds to Treatments tab
   const handleAutoAddTreatmentFromRegion = (treatment: Treatment) => {
     setTreatments((prev) => [treatment, ...prev]);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTreatment(treatment), 'Thêm liệu trình vùng mới', treatment.patientName);
+    }
 
     // Đồng bộ Ngày Khám Nhắc sang EMR
     const revisitDateVal = treatment.revisitDate || treatment.followup;
@@ -742,6 +944,9 @@ export default function App() {
             if (selectedEMRPatient?.id === p.id) {
               setSelectedEMRPatient(updatedPatient);
             }
+            if (getSupabaseConfig().isConfigured) {
+              handleSyncResult(supabaseSavePatient(updatedPatient), 'Cập nhật EMR vùng mới', updatedPatient.name);
+            }
             return updatedPatient;
           }
           return p;
@@ -758,15 +963,24 @@ export default function App() {
   const handleAddAppointment = (appt: Appointment) => {
     setAppointments((prev) => [appt, ...prev]);
     showToast(`Đã đặt lịch hẹn cho ${appt.patientName}`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveAppointment(appt), 'Lưu lịch hẹn', appt.patientName, true);
+    }
   };
 
   const handleUpdateAppointment = (appt: Appointment) => {
     setAppointments((prev) => prev.map((a) => (a.id === appt.id ? appt : a)));
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveAppointment(appt), 'Cập nhật lịch hẹn', appt.patientName);
+    }
   };
 
   const handleDeleteAppointment = (id: string) => {
     setAppointments((prev) => prev.filter((a) => a.id !== id));
     showToast('Đã xóa lịch hẹn.');
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteAppointment(id), 'Xóa lịch hẹn', id);
+    }
   };
 
   // KEY REQUIREMENT 4: Appointments sync from EMR visit dates
@@ -780,7 +994,7 @@ export default function App() {
           (a) => a.patientId === p.id && a.time === timeStr
         );
         if (!exists) {
-          syncedList.push({
+          const newAppt: Appointment = {
             id: uid('LH'),
             patientId: p.id,
             patientName: p.name,
@@ -791,7 +1005,11 @@ export default function App() {
             status: 'Đã đặt',
             sourceFromEMR: true,
             emrDate: p.firstVisitDateTime,
-          });
+          };
+          syncedList.push(newAppt);
+          if (getSupabaseConfig().isConfigured) {
+            handleSyncResult(supabaseSaveAppointment(newAppt), 'Đồng bộ lịch hẹn từ EMR', newAppt.patientName);
+          }
           count++;
         }
       }
@@ -803,7 +1021,7 @@ export default function App() {
             (a) => a.patientId === p.id && a.time.includes(m.date)
           );
           if (!exists) {
-            syncedList.push({
+            const newAppt: Appointment = {
               id: uid('LH'),
               patientId: p.id,
               patientName: p.name,
@@ -814,7 +1032,11 @@ export default function App() {
               status: 'Đã đặt',
               sourceFromEMR: true,
               emrDate: m.date,
-            });
+            };
+            syncedList.push(newAppt);
+            if (getSupabaseConfig().isConfigured) {
+              handleSyncResult(supabaseSaveAppointment(newAppt), 'Đồng bộ lịch hẹn đánh giá EMR', newAppt.patientName);
+            }
             count++;
           }
         });
@@ -829,70 +1051,112 @@ export default function App() {
   const handleAddInvoice = (inv: Invoice) => {
     setInvoices((prev) => [inv, ...prev]);
     showToast(`Đã tạo hóa đơn ${inv.id} thành công.`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveInvoice(inv), 'Lưu hóa đơn', inv.id);
+    }
   };
 
   const handleUpdateInvoice = (inv: Invoice) => {
     setInvoices((prev) => prev.map((i) => (i.id === inv.id ? inv : i)));
     showToast(`Cập nhật hóa đơn ${inv.id}`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveInvoice(inv), 'Cập nhật hóa đơn', inv.id);
+    }
   };
 
   const handleDeleteInvoice = (id: string) => {
     setInvoices((prev) => prev.filter((i) => i.id !== id));
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteInvoice(id), 'Xóa hóa đơn', id);
+    }
   };
 
   // Expense handlers
   const handleAddExpense = (exp: Expense) => {
     setExpenses((prev) => [exp, ...prev]);
     showToast(`Đã ghi nhận phiếu chi: ${exp.title}`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveExpense(exp), 'Lưu phiếu chi', exp.title);
+    }
   };
 
   const handleUpdateExpense = (exp: Expense) => {
     setExpenses((prev) => prev.map((e) => (e.id === exp.id ? exp : e)));
     showToast(`Đã cập nhật phiếu chi: ${exp.title}`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveExpense(exp), 'Cập nhật phiếu chi', exp.title);
+    }
   };
 
   const handleDeleteExpense = (id: string) => {
     setExpenses((prev) => prev.filter((e) => e.id !== id));
     showToast('Đã xóa phiếu chi khỏi sổ kế toán.');
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteExpense(id), 'Xóa phiếu chi', id);
+    }
   };
 
   const handleUpdateTaxConfig = (cfg: TaxConfig) => {
     setTaxConfig(cfg);
     showToast('Đã cập nhật quy tắc tính thuế phòng khám.');
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTaxConfig(cfg), 'Cập nhật cấu hình thuế');
+    }
   };
 
   // Exercise handlers
   const handleAddExercise = (ex: Exercise) => {
     setExercises((prev) => [ex, ...prev]);
     showToast(`Đã thêm bài tập ${ex.name}`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveExercise(ex), 'Lưu bài tập', ex.name);
+    }
   };
 
   const handleDeleteExercise = (id: string) => {
     setExercises((prev) => prev.filter((e) => e.id !== id));
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteExercise(id), 'Xóa bài tập', id);
+    }
   };
 
   // Technician handlers
   const handleAddTechnician = (tech: Technician) => {
     setTechnicians((prev) => [tech, ...prev]);
     showToast(`Đã thêm kỹ thuật viên ${tech.name}`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTechnician(tech), 'Thêm kỹ thuật viên', tech.name);
+    }
   };
 
   const handleUpdateTechnician = (tech: Technician) => {
     setTechnicians((prev) => prev.map((t) => (t.id === tech.id ? tech : t)));
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTechnician(tech), 'Cập nhật kỹ thuật viên', tech.name);
+    }
   };
 
   const handleDeleteTechnician = (id: string) => {
     setTechnicians((prev) => prev.filter((t) => t.id !== id));
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteTechnician(id), 'Xóa kỹ thuật viên', id);
+    }
   };
 
   // Staff handlers
   const handleAddStaff = (staff: Staff) => {
     setStaffList((prev) => [staff, ...prev]);
     showToast(`Đã thêm tài khoản nhân viên ${staff.name}`);
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveStaff(staff), 'Thêm nhân viên', staff.name, true);
+    }
   };
 
   const handleDeleteStaff = (id: string) => {
     setStaffList((prev) => prev.filter((s) => s.id !== id));
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseDeleteStaff(id), 'Xóa nhân viên', id);
+    }
   };
 
   // Logout handler
@@ -1003,6 +1267,8 @@ export default function App() {
           onLogout={handleLogout}
           upcomingNoticeCount={upcomingNotices.length}
           onToggleUpcomingAlerts={handleToggleUpcomingAlerts}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+          isSupabaseConnected={isSupabaseConnected}
         />
 
         {/* Dynamic View Tab */}
@@ -1027,18 +1293,15 @@ export default function App() {
             {activeTab === 'patients' && (
               <PatientsTab
                 patients={patients}
+                appointments={appointments}
+                treatments={treatments}
+                warranties={warranties}
+                invoices={invoices}
                 onAddPatient={handleAddPatient}
                 onUpdatePatient={handleUpdatePatient}
                 onDeletePatient={handleDeletePatient}
                 onOpenEMR={(p) => setSelectedEMRPatient(p)}
                 onOpenImport={() => setIsImportModalOpen(true)}
-              />
-            )}
-
-            {activeTab === 'emr-standards' && (
-              <StandardEMRTab
-                onCreatePatientFromTemplate={handleCreatePatientFromStandard}
-                showToast={showToast}
               />
             )}
 
@@ -1194,13 +1457,14 @@ export default function App() {
                 warranties={warranties}
                 setWarranties={setWarranties}
                 showToast={showToast}
+                onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+                isSupabaseConnected={isSupabaseConnected}
               />
             )}
 
             {(activeTab === 'patient-portal' ||
               activeTab === 'patient-exercises' ||
-              activeTab === 'patient-warranty' ||
-              activeTab === 'patient-checklist') &&
+              activeTab === 'patient-warranty') &&
               activePortalPatient && (
                 <PatientPortalTab
                   patient={activePortalPatient}
@@ -1209,14 +1473,11 @@ export default function App() {
                   invoices={invoices}
                   exercises={exercises}
                   warranties={warranties}
-                  onUpdatePatient={handleUpdatePatient}
                   initialTab={
                     activeTab === 'patient-warranty'
                       ? 'warranty'
                       : activeTab === 'patient-exercises'
                       ? 'exercises'
-                      : activeTab === 'patient-checklist'
-                      ? 'checklist'
                       : 'overview'
                   }
                   onSwitchTab={(tab) =>
@@ -1225,8 +1486,6 @@ export default function App() {
                         ? 'patient-warranty'
                         : tab === 'exercises'
                         ? 'patient-exercises'
-                        : tab === 'checklist'
-                        ? 'patient-checklist'
                         : 'patient-portal'
                     )
                   }
@@ -1260,6 +1519,10 @@ export default function App() {
           onClose={() => setSelectedEMRPatient(null)}
           treatments={treatments}
           exercises={exercises}
+          appointments={appointments}
+          warranties={warranties}
+          invoices={invoices}
+          onDeletePatient={handleDeletePatient}
           onAddRegion={(newRegion: BodyRegion, autoTreatment: Treatment) => {
             handleAutoAddTreatmentFromRegion(autoTreatment);
             const updatedPatient: Patient = {
@@ -1313,6 +1576,40 @@ export default function App() {
         onClose={() => setIsLoginModalOpen(false)}
       />
 
+      {/* Centralized Supabase Cloud Sync & Configuration Modal */}
+      <SupabaseConfigModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => {
+          setIsSupabaseModalOpen(false);
+          setIsSupabaseConnected(getSupabaseConfig().isConfigured);
+        }}
+        localData={{
+          patients,
+          treatments,
+          appointments,
+          invoices,
+          expenses,
+          technicians,
+          staffList,
+          warranties,
+          exercises,
+          taxConfig,
+        }}
+        onDataFetchedFromCloud={(cloudData) => {
+          if (cloudData.patients) setPatients(ensurePatientExercises(cloudData.patients));
+          if (cloudData.treatments) setTreatments(cloudData.treatments);
+          if (cloudData.appointments) setAppointments(cloudData.appointments);
+          if (cloudData.staffList) setStaffList(cloudData.staffList);
+          if (cloudData.technicians) setTechnicians(cloudData.technicians);
+          if (cloudData.invoices) setInvoices(cloudData.invoices);
+          if (cloudData.expenses) setExpenses(cloudData.expenses);
+          if (cloudData.warranties) setWarranties(cloudData.warranties);
+          if (cloudData.exercises) setExercises(cloudData.exercises);
+          if (cloudData.taxConfig) setTaxConfig(cloudData.taxConfig);
+        }}
+        onNotify={showToast}
+      />
+
       {/* Floating Upcoming Appointments Toast Notification (Trong vòng 45 phút) */}
       <UpcomingAppointmentToast
         upcomingNotices={upcomingNotices}
@@ -1324,10 +1621,49 @@ export default function App() {
       />
 
       {/* Floating Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center space-x-3 text-xs font-semibold">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>{toastMessage}</span>
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 max-w-md px-4 py-3 rounded-2xl shadow-2xl border flex items-start space-x-3 text-xs transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 ${
+            toast.type === 'error'
+              ? 'bg-rose-950/95 text-rose-50 border-rose-500 shadow-rose-950/50 backdrop-blur-sm'
+              : toast.type === 'warning'
+              ? 'bg-amber-950/95 text-amber-50 border-amber-500 shadow-amber-950/50 backdrop-blur-sm'
+              : toast.type === 'success'
+              ? 'bg-emerald-950/95 text-emerald-50 border-emerald-500 shadow-emerald-950/50 backdrop-blur-sm'
+              : 'bg-slate-900/95 text-slate-50 border-slate-700 shadow-slate-950/50 backdrop-blur-sm'
+          }`}
+        >
+          <div className="shrink-0 mt-0.5">
+            {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-400 animate-pulse" />}
+            {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
+            {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+            {toast.type === 'info' && <span className="inline-block w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping mt-1" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-xs">
+              {toast.type === 'error'
+                ? 'Thông báo lỗi Supabase'
+                : toast.type === 'warning'
+                ? 'Cảnh báo hệ thống'
+                : toast.type === 'success'
+                ? 'Đồng bộ thành công'
+                : 'Thông báo'}
+            </div>
+            <div className="mt-0.5 text-xs opacity-95 leading-relaxed">{toast.message}</div>
+            {toast.details && toast.details !== toast.message && (
+              <div className="mt-1.5 p-2 bg-black/30 rounded-lg text-[11px] font-mono text-rose-200/90 break-words max-h-24 overflow-y-auto border border-rose-900/40">
+                {toast.details}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="shrink-0 p-1 hover:bg-white/10 rounded-lg text-white/70 hover:text-white transition"
+            title="Đóng thông báo"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

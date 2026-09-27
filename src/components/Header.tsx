@@ -13,6 +13,7 @@ import {
   Clock,
   RefreshCw,
   LogOut,
+  Cloud,
 } from 'lucide-react';
 import { getTimeRemainingUntilNextExport, isAutoExportEnabled } from '../utils/autoBackupManager';
 
@@ -29,6 +30,8 @@ interface HeaderProps {
   onLogout?: () => void;
   upcomingNoticeCount?: number;
   onToggleUpcomingAlerts?: () => void;
+  onOpenSupabaseModal?: () => void;
+  isSupabaseConnected?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,6 +47,8 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   upcomingNoticeCount = 0,
   onToggleUpcomingAlerts,
+  onOpenSupabaseModal,
+  isSupabaseConnected = false,
 }) => {
   const titles: Record<string, { title: string; subtitle: string }> = {
     dashboard: {
@@ -210,6 +215,29 @@ export const Header: React.FC<HeaderProps> = ({
                 {pendingCheckInCount}
               </span>
             )}
+          </button>
+        )}
+
+        {/* NÚT KẾT NỐI & ĐỒNG BỘ SUPABASE CLOUD */}
+        {onOpenSupabaseModal && (
+          <button
+            type="button"
+            onClick={onOpenSupabaseModal}
+            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 border ${
+              isSupabaseConnected
+                ? 'bg-teal-50 border-teal-200 text-teal-800 hover:bg-teal-100 shadow-xs'
+                : 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100 shadow-xs'
+            }`}
+            title={
+              isSupabaseConnected
+                ? 'Hệ thống tự động lưu trữ & đồng bộ thời gian thực (Dự án: ejnjjcxhbkpkxnexlofj)'
+                : 'Trung tâm đồng bộ dữ liệu tự động'
+            }
+          >
+            <Cloud className="w-3.5 h-3.5 text-teal-600" />
+            <span className="hidden lg:inline">Đồng Bộ Tự Động</span>
+            <span className="lg:hidden">Đồng Bộ</span>
+            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></span>
           </button>
         )}
 

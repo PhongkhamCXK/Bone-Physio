@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Staff } from '../types';
 import { Shield, Plus, Lock, Trash2, Edit2, Key } from 'lucide-react';
 import { uid } from '../data/seedData';
+import { ConfirmModal } from './ConfirmModal';
 
 interface StaffTabProps {
   staffList: Staff[];
@@ -15,6 +16,7 @@ export const StaffTab: React.FC<StaffTabProps> = ({
   onDeleteStaff,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<Staff | null>(null);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('123');
@@ -118,12 +120,8 @@ export const StaffTab: React.FC<StaffTabProps> = ({
               {!s.protected && (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (confirm(`Xóa nhân viên ${s.name}?`)) {
-                      onDeleteStaff(s.id);
-                    }
-                  }}
-                  className="text-slate-400 hover:text-red-500 transition flex items-center space-x-1"
+                  onClick={() => setStaffToDelete(s)}
+                  className="text-slate-400 hover:text-rose-600 transition flex items-center space-x-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Xóa</span>
@@ -227,6 +225,32 @@ export const StaffTab: React.FC<StaffTabProps> = ({
             </form>
           </div>
         </div>
+      )}
+      {/* Modal Xác Nhận Xóa Nhân Viên */}
+      {staffToDelete && (
+        <ConfirmModal
+          isOpen={!!staffToDelete}
+          onClose={() => setStaffToDelete(null)}
+          onConfirm={() => {
+            onDeleteStaff(staffToDelete.id);
+            setStaffToDelete(null);
+          }}
+          title="Xác Nhận Xóa Nhân Viên"
+          confirmText="Xóa Nhân Viên"
+          variant="danger"
+          icon="trash"
+          message={
+            <div>
+              <p>
+                Bạn có chắc chắn muốn xóa tài khoản nhân viên{' '}
+                <strong>{staffToDelete.name}</strong> (@{staffToDelete.username})?
+              </p>
+              <p className="mt-1 text-slate-500 text-[11px]">
+                Vai trò: {staffToDelete.title || staffToDelete.role}
+              </p>
+            </div>
+          }
+        />
       )}
     </div>
   );

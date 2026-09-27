@@ -14,6 +14,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
+import { ConfirmModal } from './ConfirmModal';
 
 interface TechniciansTabProps {
   technicians: Technician[];
@@ -33,6 +34,7 @@ export const TechniciansTab: React.FC<TechniciansTabProps> = ({
   onOpenQuickCheckInOut,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [techToDelete, setTechToDelete] = useState<Technician | null>(null);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('123');
@@ -238,12 +240,8 @@ export const TechniciansTab: React.FC<TechniciansTabProps> = ({
 
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Xóa KTV ${t.name}?`)) {
-                    onDeleteTechnician(t.id);
-                  }
-                }}
-                className="text-slate-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition"
+                onClick={() => setTechToDelete(t)}
+                className="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 transition"
                 title="Xóa KTV"
               >
                 <Trash2 className="w-4 h-4" />
@@ -357,6 +355,32 @@ export const TechniciansTab: React.FC<TechniciansTabProps> = ({
             </form>
           </div>
         </div>
+      )}
+      {/* Modal Xác Nhận Xóa Kỹ Thuật Viên */}
+      {techToDelete && (
+        <ConfirmModal
+          isOpen={!!techToDelete}
+          onClose={() => setTechToDelete(null)}
+          onConfirm={() => {
+            onDeleteTechnician(techToDelete.id);
+            setTechToDelete(null);
+          }}
+          title="Xác Nhận Xóa Kỹ Thuật Viên"
+          confirmText="Xóa Kỹ Thuật Viên"
+          variant="danger"
+          icon="trash"
+          message={
+            <div>
+              <p>
+                Bạn có chắc chắn muốn xóa kỹ thuật viên{' '}
+                <strong>{techToDelete.name}</strong> ({techToDelete.id})?
+              </p>
+              <p className="mt-1 text-slate-500 text-[11px]">
+                Chuyên môn: {techToDelete.techType} • Trạng thái: {techToDelete.status}
+              </p>
+            </div>
+          }
+        />
       )}
     </div>
   );
