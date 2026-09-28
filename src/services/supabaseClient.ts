@@ -28,6 +28,8 @@ export interface SupabaseConfig {
 const CONFIG_STORAGE_KEY = 'bp_supabase_config';
 export const DEFAULT_SUPABASE_PROJECT_ID = 'ejnjjcxhbkpkxnexlofj';
 export const DEFAULT_SUPABASE_URL = `https://${DEFAULT_SUPABASE_PROJECT_ID}.supabase.co`;
+export const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqbmpqY3hoYmtwa3huZXhsb2ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNzAxODEsImV4cCI6MjEwNTc0NjE4MX0.5hzl29SRRtUTF3BmCRzE35qG2JBkvMeLuu_D2nhokoc';
 
 /**
  * Chuẩn hóa Supabase URL: chấp nhận cả Project Ref ID (vd: ejnjjcxhbkpkxnexlofj) lẫn Full URL
@@ -112,14 +114,14 @@ export function getSupabaseConfig(): SupabaseConfig {
     };
   }
 
-  // Tự động vận hành (Auto-Pilot) với dự án ejnjjcxhbkpkxnexlofj
+  // Cấu hình kết nối trực tiếp dự án Supabase chính thức của phòng khám (ejnjjcxhbkpkxnexlofj)
   return {
     url: envUrl || DEFAULT_SUPABASE_URL,
-    anonKey: 'AUTO_PILOT_ACTIVE',
+    anonKey: DEFAULT_SUPABASE_ANON_KEY,
     isConfigured: true,
     source: 'auto',
     projectId: extractProjectId(envUrl || DEFAULT_SUPABASE_URL),
-    isAutoPilot: true,
+    isAutoPilot: false,
   };
 }
 
@@ -133,8 +135,8 @@ export function saveSupabaseConfig(url: string, anonKey: string): SupabaseConfig
   if (!cleanKey || cleanKey === 'VITE_SUPABASE_ANON_KEY' || cleanKey === 'AUTO_PILOT_ACTIVE') {
     const autoCfg = {
       url: cleanUrl,
-      anonKey: 'AUTO_PILOT_ACTIVE',
-      isAutoPilot: true,
+      anonKey: DEFAULT_SUPABASE_ANON_KEY,
+      isAutoPilot: false,
       source: 'auto',
     };
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(autoCfg));
@@ -157,7 +159,7 @@ export function getSupabaseClient(): SupabaseClient | null {
   if (activeClient) return activeClient;
 
   const cfg = getSupabaseConfig();
-  if (!cfg.isConfigured || !cfg.url || !cfg.anonKey || cfg.isAutoPilot || cfg.anonKey === 'AUTO_PILOT_ACTIVE') {
+  if (!cfg.isConfigured || !cfg.url || !cfg.anonKey) {
     return null;
   }
 
@@ -1497,6 +1499,7 @@ export function subscribeToSupabaseRealtime(handlers: {
   onAppointmentChange?: (eventType: 'INSERT' | 'UPDATE' | 'DELETE', row: any) => void;
   onTreatmentChange?: (eventType: 'INSERT' | 'UPDATE' | 'DELETE', row: any) => void;
   onStaffChange?: (eventType: 'INSERT' | 'UPDATE' | 'DELETE', row: any) => void;
+  onTechnicianChange?: (eventType: 'INSERT' | 'UPDATE' | 'DELETE', row: any) => void;
   onInvoiceChange?: (eventType: 'INSERT' | 'UPDATE' | 'DELETE', row: any) => void;
   onWarrantyChange?: (eventType: 'INSERT' | 'UPDATE' | 'DELETE', row: any) => void;
 }): () => void {
@@ -1511,6 +1514,8 @@ export function subscribeToSupabaseRealtime(handlers: {
       handlers.onTreatmentChange?.(eventType, event.data);
     } else if (event.type === 'staff') {
       handlers.onStaffChange?.(eventType, event.data);
+    } else if (event.type === 'technician') {
+      handlers.onTechnicianChange?.(eventType, event.data);
     } else if (event.type === 'invoice') {
       handlers.onInvoiceChange?.(eventType, event.data);
     } else if (event.type === 'warranty') {
@@ -1553,6 +1558,13 @@ export function subscribeToSupabaseRealtime(handlers: {
       { event: '*', schema: 'public', table: 'staff' },
       (payload) => {
         handlers.onStaffChange?.(payload.eventType as any, payload.new || payload.old);
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'technicians' },
+      (payload) => {
+        handlers.onTechnicianChange?.(payload.eventType as any, payload.new || payload.old);
       }
     )
     .on(

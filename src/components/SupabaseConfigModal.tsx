@@ -119,10 +119,6 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
       return;
     }
 
-    if (!confirm('Bạn có chắc chắn muốn đẩy toàn bộ danh sách bệnh nhân, lịch hẹn, tài khoản hiện tại lên Supabase Cloud để các máy khác cùng nhìn thấy?')) {
-      return;
-    }
-
     setIsSyncingUp(true);
     setSyncProgressMsg('Đang chuẩn bị đẩy dữ liệu...');
     try {

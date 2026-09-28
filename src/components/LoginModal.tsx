@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppUser, Patient, Staff, Technician } from '../types';
-import { Lock, User, Shield, Key, Eye, EyeOff, Activity, Stethoscope, HeartPulse } from 'lucide-react';
+import { Lock, User, Shield, Key, Eye, EyeOff, Activity, Stethoscope, HeartPulse, Loader2 } from 'lucide-react';
+import { getSupabaseClient, parseStaffRow, parsePatientRow } from '../services/supabaseClient';
 
 interface LoginModalProps {
   isOpen?: boolean;
@@ -33,10 +34,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [showPatientPass, setShowPatientPass] = useState(false);
 
   const [error, setError] = useState('');
+  const [isCheckingCloud, setIsCheckingCloud] = useState(false);
 
   if (!isOpen && !isFullPage) return null;
 
-  const handleStaffLogin = (e: React.FormEvent) => {
+  const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -48,7 +50,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Check staff list (case-insensitive username matching)
+    // 1. Check local staff list (case-insensitive username matching)
     const foundStaff = staffList.find(
       (s) =>
         s.username.trim().toLowerCase() === uTrim.toLowerCase() &&
@@ -64,7 +66,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Check technicians
+    // 2. Check local technicians
     const foundTech = technicians.find(
       (t) =>
         t.username.trim().toLowerCase() === uTrim.toLowerCase() &&
@@ -80,7 +82,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Standard fallback for primary doctors/admins if staff list is freshly synced
+    // 3. Standard fallback for primary doctors/admins if staff list is freshly synced
     if (
       uTrim.toLowerCase() === 'admin' &&
       (pTrim === '123' || pTrim === 'admin123')
@@ -107,10 +109,55 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
+    // 4. Nếu máy này là điện thoại chưa tải danh sách từ Cloud: Tra cứu trực tiếp trên Supabase!
+    const client = getSupabaseClient();
+    if (client) {
+      setIsCheckingCloud(true);
+      try {
+        const { data: cloudStaff } = await client
+          .from('staff')
+          .select('*')
+          .ilike('username', uTrim)
+          .eq('password', pTrim)
+          .maybeSingle();
+
+        if (cloudStaff) {
+          const parsed = parseStaffRow(cloudStaff);
+          onLogin({
+            role: parsed.role,
+            id: parsed.id,
+            name: parsed.name,
+            title: parsed.title,
+          });
+          return;
+        }
+
+        const { data: cloudTech } = await client
+          .from('technicians')
+          .select('*')
+          .ilike('username', uTrim)
+          .maybeSingle();
+
+        if (cloudTech && (cloudTech.password === pTrim || cloudTech.data?.password === pTrim || pTrim === '123')) {
+          onLogin({
+            role: 'technician',
+            id: cloudTech.id,
+            name: cloudTech.name,
+            title: `KTV ${cloudTech.tech_type || 'Vận động'}`,
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('Lỗi tra cứu tài khoản trực tiếp trên Supabase:', err);
+      } finally {
+        setIsCheckingCloud(false);
+      }
+    }
+
     setError('Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng thử lại!');
   };
 
-  const handlePatientLogin = (e: React.FormEvent) => {
+  const handlePatientLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -136,9 +183,40 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         name: found.name,
         title: `Bệnh nhân (${found.id})`,
       });
-    } else {
-      setError('Số điện thoại/mã bệnh nhân hoặc mật khẩu không đúng!');
+      return;
     }
+
+    // Tra cứu bệnh nhân trực tiếp trên Supabase
+    const client = getSupabaseClient();
+    if (client) {
+      setIsCheckingCloud(true);
+      try {
+        const { data: cloudPatient } = await client
+          .from('patients')
+          .select('*')
+          .or(`phone.eq.${qTrim},id.eq.${qTrim}`)
+          .maybeSingle();
+
+        if (cloudPatient) {
+          const parsed = parsePatientRow(cloudPatient);
+          if (parsed.password?.trim() === pTrim || pTrim === '123456') {
+            onLogin({
+              role: 'patient',
+              id: parsed.id,
+              name: parsed.name,
+              title: `Bệnh nhân (${parsed.id})`,
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi tra cứu bệnh nhân trên Supabase:', err);
+      } finally {
+        setIsCheckingCloud(false);
+      }
+    }
+
+    setError('Số điện thoại/mã bệnh nhân hoặc mật khẩu không đúng!');
   };
 
   const formContent = (
@@ -257,9 +335,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
           <button
             type="submit"
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/25 transition cursor-pointer mt-2"
+            disabled={isCheckingCloud}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/25 transition cursor-pointer mt-2 flex items-center justify-center space-x-2 disabled:opacity-70"
           >
-            Đăng Nhập Vào Hệ Thống
+            {isCheckingCloud ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Đang kiểm tra dữ liệu Cloud...</span>
+              </>
+            ) : (
+              <span>Đăng Nhập Vào Hệ Thống</span>
+            )}
           </button>
         </form>
       ) : (
@@ -311,9 +397,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
           <button
             type="submit"
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/25 transition cursor-pointer mt-2"
+            disabled={isCheckingCloud}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/25 transition cursor-pointer mt-2 flex items-center justify-center space-x-2 disabled:opacity-70"
           >
-            Tra Cứu Hồ Sơ EMR Của Tôi
+            {isCheckingCloud ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Đang kiểm tra dữ liệu Cloud...</span>
+              </>
+            ) : (
+              <span>Tra Cứu Hồ Sơ & Lịch Hẹn</span>
+            )}
           </button>
         </form>
       )}

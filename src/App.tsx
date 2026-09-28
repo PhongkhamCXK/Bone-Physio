@@ -82,6 +82,7 @@ import {
   parseAppointmentRow,
   parseTreatmentRow,
   parseStaffRow,
+  parseTechnicianRow,
   parseInvoiceRow,
   parseWarrantyRow,
   SyncResult,
@@ -446,6 +447,18 @@ export default function App() {
             setStaffList((prev) => prev.map((x) => (x.id === s.id ? s : x)));
           } else if (eventType === 'DELETE') {
             setStaffList((prev) => prev.filter((x) => x.id !== row.id));
+          }
+        },
+        onTechnicianChange: (eventType, row) => {
+          if (!isMounted) return;
+          const t = parseTechnicianRow(row);
+          if (eventType === 'INSERT') {
+            setTechnicians((prev) => (prev.some((x) => x.id === t.id) ? prev : [t, ...prev]));
+            showToast(`⚡ [Realtime] Cập nhật kỹ thuật viên: ${t.name}`);
+          } else if (eventType === 'UPDATE') {
+            setTechnicians((prev) => prev.map((x) => (x.id === t.id ? t : x)));
+          } else if (eventType === 'DELETE') {
+            setTechnicians((prev) => prev.filter((x) => x.id !== row.id));
           }
         },
         onInvoiceChange: (eventType, row) => {
