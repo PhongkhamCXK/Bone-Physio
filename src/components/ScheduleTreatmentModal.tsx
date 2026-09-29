@@ -185,8 +185,40 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
     );
   };
 
+  const handleToggleClinicConfirmed = (index: number) => {
+    setSessions((prev) =>
+      prev.map((s, idx) => {
+        if (idx !== index) return s;
+        const nextState = !s.clinicConfirmed;
+        return {
+          ...s,
+          clinicConfirmed: nextState,
+          clinicConfirmedAt: nextState ? new Date().toLocaleString('vi-VN') : undefined,
+          clinicConfirmedBy: nextState ? revisitDoctor : undefined,
+          completed: nextState ? true : Boolean(s.patientConfirmed),
+        };
+      })
+    );
+  };
+
+  const handleUpdateSessionDoctorTech = (index: number, val: string) => {
+    setSessions((prev) =>
+      prev.map((s, idx) => (idx === index ? { ...s, technician: val, doctor: val } : s))
+    );
+  };
+
+  const handleUpdateSessionResult = (index: number, val: string) => {
+    setSessions((prev) =>
+      prev.map((s, idx) => (idx === index ? { ...s, result: val } : s))
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const confirmedCount = sessions.filter(
+      (s) => s.completed || (s.clinicConfirmed && s.patientConfirmed)
+    ).length;
 
     const updatedTreatment: Treatment = {
       ...treatment,
@@ -195,6 +227,7 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
       revisitNotes,
       doctor: revisitDoctor,
       sessions,
+      done: Math.max(treatment.done || 0, confirmedCount),
     };
 
     onSaveSchedule(
@@ -413,66 +446,117 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
                 Danh Sách {total} Buổi Điều Trị (Bấm vào ngôi sao ★ để đánh dấu Buổi Khám Nhắc Checkpoint):
               </label>
 
-              <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-xl bg-white divide-y divide-slate-100 text-xs">
+              <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-xl bg-white divide-y divide-slate-100 text-xs">
                 {sessions.map((s, idx) => (
                   <div
                     key={s.number}
-                    className={`p-2.5 flex items-center justify-between gap-2 hover:bg-slate-50 transition ${
+                    className={`p-3 space-y-2 hover:bg-slate-50/80 transition ${
                       s.isCheckpoint ? 'bg-amber-50/70 border-l-4 border-l-amber-500' : ''
                     }`}
                   >
-                    <div className="flex items-center space-x-2 flex-1 min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => toggleCheckpoint(idx)}
-                        className={`p-1 rounded-lg transition ${
-                          s.isCheckpoint
-                            ? 'text-amber-500 bg-amber-100 font-bold'
-                            : 'text-slate-300 hover:text-amber-400'
-                        }`}
-                        title={
-                          s.isCheckpoint
-                            ? 'Buổi Khám Nhắc (Bác sĩ kiểm tra)'
-                            : 'Bấm để đánh dấu Buổi Khám Nhắc'
-                        }
-                      >
-                        ★
-                      </button>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => toggleCheckpoint(idx)}
+                          className={`p-1 rounded-lg transition ${
+                            s.isCheckpoint
+                              ? 'text-amber-500 bg-amber-100 font-bold'
+                              : 'text-slate-300 hover:text-amber-400'
+                          }`}
+                          title={
+                            s.isCheckpoint
+                              ? 'Buổi Khám Nhắc (Bác sĩ kiểm tra)'
+                              : 'Bấm để đánh dấu Buổi Khám Nhắc'
+                          }
+                        >
+                          ★
+                        </button>
 
-                      <span className="font-bold text-slate-900 w-16 flex-shrink-0">
-                        Buổi {s.number}
-                      </span>
+                        <span className="font-bold text-slate-900 w-16 flex-shrink-0">
+                          Buổi {s.number}
+                        </span>
 
-                      <span
-                        className={`truncate text-[11px] ${
-                          s.isCheckpoint ? 'font-bold text-amber-900' : 'text-slate-600'
-                        }`}
-                      >
-                        {s.content}
-                      </span>
+                        <span
+                          className={`truncate text-[11px] ${
+                            s.isCheckpoint ? 'font-bold text-amber-900' : 'text-slate-700'
+                          }`}
+                        >
+                          {s.content}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                        <input
+                          type="date"
+                          value={s.date}
+                          onChange={(e) => handleUpdateSessionDate(idx, e.target.value)}
+                          className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+
+                        {/* TÍCH HIỂN THỊ TRẠNG THÁI XÁC NHẬN LÀM RÕ RÀNG */}
+                        {s.clinicConfirmed && s.patientConfirmed ? (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold flex items-center space-x-1">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            <span>Đã làm (2/2 bên)</span>
+                          </span>
+                        ) : s.clinicConfirmed && !s.patientConfirmed ? (
+                          <span className="text-[10px] bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-full font-bold">
+                            ✓ KTV xác nhận (Chờ BN)
+                          </span>
+                        ) : !s.clinicConfirmed && s.patientConfirmed ? (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold">
+                            ✓ BN xác nhận (Chờ KTV)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                            Chưa xác nhận
+                          </span>
+                        )}
+
+                        {/* NÚT XÁC NHẬN CỦA KTV / BÁC SĨ (ẤN TRƯỚC HOẶC ẤN SAU ĐỀU ĐƯỢC) */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleClinicConfirmed(idx)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center space-x-1 cursor-pointer active:scale-95 ${
+                            s.clinicConfirmed
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                              : 'bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-700 border border-slate-200 shadow-2xs'
+                          }`}
+                          title="KTV hoặc Bác sĩ ấn xác nhận đã thực hiện buổi này"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>{s.clinicConfirmed ? 'KTV Đã Xác Nhận' : 'KTV/BS Xác Nhận'}</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 flex-shrink-0">
-                      <input
-                        type="date"
-                        value={s.date}
-                        onChange={(e) => handleUpdateSessionDate(idx, e.target.value)}
-                        className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-
-                      {s.completed ? (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                          Đã làm
+                    {/* DÒNG CHI TIẾT: BÁC SĨ / KTV PHỤ TRÁCH VÀ KẾT QUẢ ĐIỀU TRỊ / TIẾN TRIỂN */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50/70 p-2 rounded-lg border border-slate-100">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-slate-500 font-semibold flex-shrink-0 text-[10px]">
+                          Bác sĩ / KTV:
                         </span>
-                      ) : s.isCheckpoint ? (
-                        <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
-                          Khám nhắc
+                        <input
+                          type="text"
+                          value={s.technician || s.doctor || ''}
+                          onChange={(e) => handleUpdateSessionDoctorTech(idx, e.target.value)}
+                          placeholder="BS. Hoàng Minh / KTV Sơn..."
+                          className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-slate-500 font-semibold flex-shrink-0 text-[10px]">
+                          Kết quả điều trị:
                         </span>
-                      ) : (
-                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                          Chưa làm
-                        </span>
-                      )}
+                        <input
+                          type="text"
+                          value={s.result || ''}
+                          onChange={(e) => handleUpdateSessionResult(idx, e.target.value)}
+                          placeholder="VAS giảm còn 3/10, cơ giãn mềm, tiến triển tốt..."
+                          className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 text-indigo-700 font-medium"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -13,6 +13,7 @@ import {
   TaxConfig,
   WarrantyRecord,
   SessionSchedule,
+  RoleStandardTreatment,
 } from './types';
 import {
   INITIAL_PATIENTS,
@@ -24,6 +25,7 @@ import {
   INITIAL_STAFF,
   INITIAL_EXPENSES,
   INITIAL_WARRANTIES,
+  INITIAL_ROLE_STANDARD_TREATMENTS,
   uid,
 } from './data/seedData';
 import { exportBothExcelAndJson } from './utils/exportUtils';
@@ -153,13 +155,66 @@ export default function App() {
 
   const [technicians, setTechnicians] = useState<Technician[]>(() => {
     const saved = localStorage.getItem('bp_technicians');
-    return saved ? JSON.parse(saved) : INITIAL_TECHNICIANS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // fallback
+      }
+    }
+    return INITIAL_TECHNICIANS;
   });
 
   const [staffList, setStaffList] = useState<Staff[]>(() => {
     const saved = localStorage.getItem('bp_staff');
-    return saved ? JSON.parse(saved) : INITIAL_STAFF;
+    if (saved) {
+      try {
+        const parsed: Staff[] = JSON.parse(saved);
+        const hasTrang = parsed.some((s) => s.username === 'Trang');
+        const hastrang = parsed.some((s) => s.username === 'trang');
+        if (!hasTrang || !hastrang) {
+          const merged = [...parsed];
+          if (!hasTrang) {
+            merged.push({
+              id: 'staff_Trang_admin',
+              username: 'Trang',
+              password: '123',
+              name: 'BS. CKI Lê Thị Thu Trang',
+              role: 'admin',
+              title: 'Bác sĩ Phục Hồi Chức Năng (Chữ T hoa)',
+              protected: false,
+            });
+          }
+          if (!hastrang) {
+            merged.push({
+              id: 'staff_trang_care',
+              username: 'trang',
+              password: '123',
+              name: 'Nguyễn Thị Thu Trang',
+              role: 'care',
+              title: 'Chuyên Viên Chăm Sóc Khách Hàng (chữ t thường)',
+              protected: false,
+            });
+          }
+          return merged;
+        }
+        return parsed;
+      } catch {
+        return INITIAL_STAFF;
+      }
+    }
+    return INITIAL_STAFF;
   });
+
+  const [roleStandardTreatments, setRoleStandardTreatments] = useState<RoleStandardTreatment[]>(() => {
+    const saved = localStorage.getItem('bp_role_standard_treatments');
+    return saved ? JSON.parse(saved) : INITIAL_ROLE_STANDARD_TREATMENTS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('bp_role_standard_treatments', JSON.stringify(roleStandardTreatments));
+  }, [roleStandardTreatments]);
 
   const [expenses, setExpenses] = useState<Expense[]>(() => {
     const saved = localStorage.getItem('bp_expenses');
@@ -1686,6 +1741,7 @@ export default function App() {
             handleUpdatePatient(updatedPatient);
           }}
           onUpdatePatient={handleUpdatePatient}
+          onUpdateTreatment={handleUpdateTreatment}
           onNavigateToTreatments={() => {
             setSelectedEMRPatient(null);
             setActiveTab('treatments');

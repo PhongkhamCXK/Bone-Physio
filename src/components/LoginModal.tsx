@@ -50,13 +50,54 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // 1. Check local staff list (case-insensitive username matching)
-    const foundStaff = staffList.find(
-      (s) =>
-        s.username.trim().toLowerCase() === uTrim.toLowerCase() &&
-        s.password.trim() === pTrim
+    // 1. ƯU TIÊN SỐ 1: So khớp CHÍNH XÁC từng chữ cái HOA / THƯỜNG (Case-sensitive exact match)
+    // Giúp phân biệt rạch ròi giữa các tài khoản như "Trang" (Bác sĩ/Quản trị viên) và "trang" (CSKH/KTV)
+    const exactStaff = staffList.find(
+      (s) => s.username.trim() === uTrim && s.password.trim() === pTrim
     );
-    if (foundStaff) {
+    if (exactStaff) {
+      onLogin({
+        role: exactStaff.role,
+        id: exactStaff.id,
+        name: exactStaff.name,
+        title: exactStaff.title,
+      });
+      return;
+    }
+
+    const exactTech = technicians.find(
+      (t) => t.username.trim() === uTrim && t.password.trim() === pTrim
+    );
+    if (exactTech) {
+      onLogin({
+        role: 'technician',
+        id: exactTech.id,
+        name: exactTech.name,
+        title: `KTV ${exactTech.techType}${exactTech.isLead ? ' (Trưởng Nhóm)' : ''}`,
+      });
+      return;
+    }
+
+    // 2. Kiểm tra nếu có nhiều tài khoản trùng tên khác chữ hoa/thường (VD: Trang và trang)
+    const matchingStaffCi = staffList.filter(
+      (s) => s.username.trim().toLowerCase() === uTrim.toLowerCase() && s.password.trim() === pTrim
+    );
+    const matchingTechCi = technicians.filter(
+      (t) => t.username.trim().toLowerCase() === uTrim.toLowerCase() && t.password.trim() === pTrim
+    );
+    const totalCiMatches = matchingStaffCi.length + matchingTechCi.length;
+
+    // Nếu phát hiện có từ 2 tài khoản trùng tên khi không phân biệt hoa thường, bắt buộc người dùng nhập đúng chữ hoa/thường
+    if (totalCiMatches > 1) {
+      setError(
+        `Hệ thống có các tài khoản khác nhau nhưng phân biệt chữ cái đầu viết HOA và THƯỜNG (Ví dụ: 'Trang' và 'trang' với chức vụ khác nhau). Vui lòng nhập đúng chữ hoa/thường của tài khoản bạn muốn đăng nhập!`
+      );
+      return;
+    }
+
+    // Nếu chỉ có duy nhất 1 tài khoản không bị trùng lặp, cho phép dự phòng không phân biệt hoa thường
+    if (matchingStaffCi.length === 1) {
+      const foundStaff = matchingStaffCi[0];
       onLogin({
         role: foundStaff.role,
         id: foundStaff.id,
@@ -66,18 +107,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // 2. Check local technicians
-    const foundTech = technicians.find(
-      (t) =>
-        t.username.trim().toLowerCase() === uTrim.toLowerCase() &&
-        t.password.trim() === pTrim
-    );
-    if (foundTech) {
+    if (matchingTechCi.length === 1) {
+      const foundTech = matchingTechCi[0];
       onLogin({
         role: 'technician',
         id: foundTech.id,
         name: foundTech.name,
-        title: `KTV ${foundTech.techType}`,
+        title: `KTV ${foundTech.techType}${foundTech.isLead ? ' (Trưởng Nhóm)' : ''}`,
       });
       return;
     }

@@ -43,11 +43,28 @@ export interface SessionSchedule {
   isCheckpoint?: boolean;
   notes?: string;
   technician?: string;
+  doctor?: string; // Bác sĩ phụ trách / giám sát buổi
+  result?: string; // Kết quả điều trị / tiến triển lâm sàng sau buổi tập
   // XÁC NHẬN BUỔI TẬP 2 BÊN (KTV & BỆNH NHÂN)
   clinicConfirmed?: boolean; // Phía phòng khám / KTV xác nhận
   clinicConfirmedAt?: string;
+  clinicConfirmedBy?: string; // Tên KTV hoặc Bác sĩ xác nhận
   patientConfirmed?: boolean; // Phía tài khoản bệnh nhân xác nhận
   patientConfirmedAt?: string;
+}
+
+export interface RoleStandardTreatment {
+  id: string;
+  role: 'Vận động' | 'Máy' | 'Tay';
+  name: string;
+  targetBodyPart: string;
+  durationMinutes: number;
+  parameters: string;
+  description: string;
+  indications?: string;
+  contraindications?: string;
+  updatedBy: string;
+  updatedAt: string;
 }
 
 export interface Treatment {

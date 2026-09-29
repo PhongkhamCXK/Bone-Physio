@@ -9,7 +9,6 @@ import {
   Sun,
   Dumbbell,
   Utensils,
-  Plus,
   HeartPulse,
   AlertCircle,
   Coffee,
@@ -23,7 +22,6 @@ interface PatientDailyChecklistProps {
   patient: Patient;
   exercises?: Exercise[];
   onToggleTask: (taskId: string) => void;
-  onAddTask?: (task: DailyChecklistTask) => void;
   compact?: boolean;
 }
 
@@ -142,7 +140,6 @@ export const PatientDailyChecklist: React.FC<PatientDailyChecklistProps> = ({
   patient,
   exercises,
   onToggleTask,
-  onAddTask,
   compact = false,
 }) => {
   const tasks: DailyChecklistTask[] =
@@ -153,37 +150,12 @@ export const PatientDailyChecklist: React.FC<PatientDailyChecklistProps> = ({
   const completedCount = tasks.filter((t) => t.isCompleted).length;
   const progressPercent = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
-  // New task form state
-  const [isAddingCustom, setIsAddingCustom] = useState(false);
-  const [newTaskName, setNewTaskName] = useState('');
-  const [newTaskTime, setNewTaskTime] = useState('Buổi sáng');
-  const [newTaskCategory, setNewTaskCategory] = useState<'Bài tập' | 'Ăn uống' | 'Dinh dưỡng' | 'Thói quen'>('Bài tập');
-
   const todayStr = new Intl.DateTimeFormat('vi-VN', {
     weekday: 'long',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   }).format(new Date());
-
-  const handleCreateTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskName.trim()) return;
-
-    const created: DailyChecklistTask = {
-      id: uid('TASK'),
-      task: newTaskName.trim(),
-      timeOfDay: newTaskTime,
-      category: newTaskCategory,
-      isCompleted: false,
-    };
-
-    if (onAddTask) {
-      onAddTask(created);
-    }
-    setNewTaskName('');
-    setIsAddingCustom(false);
-  };
 
   return (
     <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-6">
@@ -235,7 +207,7 @@ export const PatientDailyChecklist: React.FC<PatientDailyChecklistProps> = ({
         </div>
       </div>
 
-      {/* Header & Controls */}
+      {/* Header & Controls (Bệnh nhân chỉ xem và stick nhiệm vụ được chỉ định) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
           <div className="flex items-center space-x-2">
@@ -245,70 +217,15 @@ export const PatientDailyChecklist: React.FC<PatientDailyChecklistProps> = ({
             </h3>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Gồm các bài tập về nhà chỉ định, chế độ ăn uống &amp; thói quen sinh hoạt mỗi ngày. Nhấp vào nút stick để đánh dấu việc đã làm.
+            Được Bác sĩ chỉ định từ bài tập về nhà, chế độ dinh dưỡng &amp; kiểm soát bia rượu hằng ngày. Bệnh nhân nhấp vào nút stick để đánh dấu việc đã làm.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsAddingCustom(!isAddingCustom)}
-          className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition self-start sm:self-auto border border-blue-200"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Thêm Việc Cá Nhân</span>
-        </button>
+        <div className="px-3.5 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 self-start sm:self-auto shadow-2xs">
+          <span>Tiến độ hoàn thành:</span>
+          <span className="text-amber-950 font-black">{completedCount}/{tasks.length} việc</span>
+        </div>
       </div>
-
-      {/* Add Task Form if open */}
-      {isAddingCustom && (
-        <form
-          onSubmit={handleCreateTask}
-          className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 animate-in fade-in"
-        >
-          <h4 className="text-xs font-bold text-slate-800">Thêm Nhiệm Vụ / Lời Nhắc Mới Hôm Nay</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Nội dung bài tập hoặc ăn uống:
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="VD: Tập gập duỗi gối 15 phút, Uống sữa hạt..."
-                value={newTaskName}
-                onChange={(e) => setNewTaskName(e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Thời điểm trong ngày:
-              </label>
-              <input
-                type="text"
-                value={newTaskTime}
-                onChange={(e) => setNewTaskTime(e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end space-x-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setIsAddingCustom(false)}
-              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm"
-            >
-              Lưu Việc Cần Làm
-            </button>
-          </div>
-        </form>
-      )}
 
       {/* Task List with Clickable Stick Buttons */}
       <div className="space-y-3">
