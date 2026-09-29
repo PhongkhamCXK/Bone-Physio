@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { uid, PROTOCOL_TEMPLATES } from '../data/seedData';
 import { ConfirmModal } from './ConfirmModal';
+import { smartSearchMatch } from '../utils/textUtils';
 
 interface TreatmentsTabProps {
   treatments: Treatment[];
@@ -252,9 +253,10 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
 
   const filtered = treatments.filter((t) => {
     const matchQuery =
-      t.patientName.toLowerCase().includes(search.toLowerCase()) ||
-      t.bodyPart.toLowerCase().includes(search.toLowerCase()) ||
-      t.plan.toLowerCase().includes(search.toLowerCase());
+      smartSearchMatch(t.patientName, search) ||
+      smartSearchMatch(t.bodyPart, search) ||
+      smartSearchMatch(t.plan, search) ||
+      smartSearchMatch(t.id, search);
 
     const revDate = t.revisitDate || t.followup;
     let diffDays: number | null = null;

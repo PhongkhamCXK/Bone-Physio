@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Patient, Treatment, Appointment, Invoice } from '../types';
+import { Patient, Treatment, Appointment, Invoice, SessionSchedule } from '../types';
 import { RevisitPatientsWidget } from './dashboard/RevisitPatientsWidget';
 import {
   getPatientsDueForRevisitInNext3Days,
@@ -39,6 +39,7 @@ interface DashboardTabProps {
   onUpdatePatient?: (patient: Patient) => void;
   onAddPatient?: (patient: Patient) => void;
   onShowToast?: (message: string) => void;
+  onOpenMismatchModal?: () => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -53,6 +54,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onUpdatePatient,
   onAddPatient,
   onShowToast,
+  onOpenMismatchModal,
 }) => {
   const [isBulkOverdueModalOpen, setIsBulkOverdueModalOpen] = useState(false);
 
@@ -60,6 +62,53 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const activeAppts = appointments.filter((a) => a.status !== 'Hoàn thành').length;
   const ongoingTreatments = treatments.filter((t) => t.status === 'Đang điều trị').length;
   const revisitDue3Days = getPatientsDueForRevisitInNext3Days(patients, treatments, 3, false).length;
+
+  // QUÉT CẢNH BÁO BUỔI TẬP CHƯA ĐỒNG BỘ XÁC NHẬN 2 BÊN (KTV hoặc Bệnh nhân chưa ấn)
+  const unconfirmedMismatchSessions = useMemo(() => {
+    const list: {
+      treatment: Treatment;
+      session: SessionSchedule;
+      patientName: string;
+      bodyPart: string;
+      reason: string;
+    }[] = [];
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    treatments.forEach((t) => {
+      (t.sessions || []).forEach((s) => {
+        const clinicDone = Boolean(s.clinicConfirmed || s.completed);
+        const patientDone = Boolean(s.patientConfirmed);
+        if (clinicDone && !patientDone) {
+          list.push({
+            treatment: t,
+            session: s,
+            patientName: t.patientName,
+            bodyPart: t.bodyPart,
+            reason: `KTV đã duyệt, nhưng Bệnh nhân (${t.patientName}) chưa ấn xác nhận buổi ${s.number}`,
+          });
+        } else if (!clinicDone && patientDone) {
+          list.push({
+            treatment: t,
+            session: s,
+            patientName: t.patientName,
+            bodyPart: t.bodyPart,
+            reason: `Bệnh nhân (${t.patientName}) đã ấn xác nhận buổi ${s.number}, nhưng KTV chưa duyệt`,
+          });
+        } else if (!clinicDone && !patientDone && (s.date === todayStr || (s.number <= t.done && t.done > 0))) {
+          list.push({
+            treatment: t,
+            session: s,
+            patientName: t.patientName,
+            bodyPart: t.bodyPart,
+            reason: `Cả 2 bên chưa ấn xác nhận buổi ${s.number} (Ngày: ${s.date || 'Hôm nay'}) của ${t.patientName}`,
+          });
+        }
+      });
+    });
+
+    return list;
+  }, [treatments]);
 
   // Danh sách bệnh nhân quá hạn tái khám mà chưa thực hiện
   const overduePatients = useMemo(() => {
@@ -330,6 +379,45 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* CẢNH BÁO BUỔI TẬP CHƯA XÁC NHẬN 2 BÊN (KTV hoặc Bệnh Nhân Chưa Ấn) */}
+      {unconfirmedMismatchSessions.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 border-2 border-orange-300 p-5 rounded-3xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start space-x-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-orange-500/25">
+              <AlertTriangle className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                  Cảnh Báo Đối Soát ({unconfirmedMismatchSessions.length} ca)
+                </span>
+                <span className="text-xs text-orange-950 font-bold">
+                  • Một Trong Hai Bên Chưa Ấn Xác Nhận Buổi Tập
+                </span>
+              </div>
+              <h4 className="text-base font-black text-slate-900 mt-1">
+                Phát hiện {unconfirmedMismatchSessions.length} buổi tập chưa được xác nhận đồng bộ 2 chiều!
+              </h4>
+              <p className="text-xs text-slate-600 mt-0.5 max-w-2xl leading-relaxed">
+                Theo quy chuẩn phòng khám: Sau mỗi buổi tập, cả <strong>KTV</strong> và <strong>Bệnh nhân</strong> đều phải ấn xác nhận trên tài khoản cá nhân. Trường hợp một trong hai bên chưa ấn, hệ thống cảnh báo ngay cho Ban Quản Trị (Admin) để kiểm tra đối soát.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 self-start md:self-auto flex-shrink-0">
+            {onOpenMismatchModal && (
+              <button
+                type="button"
+                onClick={onOpenMismatchModal}
+                className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-rose-600 hover:from-orange-700 hover:to-rose-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-600/25 flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>Kiểm Tra & Duyệt Ngay ({unconfirmedMismatchSessions.length})</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* TÍCH HỢP TÍNH NĂNG: BỆNH NHÂN CẦN TÁI KHÁM TRONG 3 NGÀY TỚI TRÊN DASHBOARD (DỰA TRÊN DỮ LIỆU EMR) */}
       <div id="revisit-patients-section">

@@ -14,9 +14,9 @@ export interface BodyRegion {
 export interface HealthMetric {
   id: string;
   date: string;
-  painScore: number; // 0-10
-  rangeOfMotion: string;
-  bloodPressure: string;
+  painScore: number; // 0-10 (Thang đau VAS)
+  rangeOfMotion: string; // Tầm vận động (ROM)
+  bloodPressure: string; // Huyết áp (mmHg)
   notes: string;
   bmi?: string;
   lipid?: string;
@@ -25,6 +25,14 @@ export interface HealthMetric {
   romBack?: string;
   romKnee?: string;
   treatmentProtocol?: string[];
+  // CÁC CHỈ SỐ LÂM SÀNG BAN ĐẦU CHUYÊN SÂU
+  muscleStrength?: string; // Sức cơ MMT (VD: 4/5, 5/5)
+  spo2?: string; // SpO2 (%)
+  heartRate?: string; // Nhịp tim (bpm)
+  weight?: number; // Cân nặng (kg)
+  height?: number; // Chiều cao (cm)
+  functionalScore?: string; // Điểm chức năng khuyết tật (ODI / NDI / WOMAC %)
+  jointCircumference?: string; // Đo chu vi vòng khớp/chi (cm)
 }
 
 export interface SessionSchedule {
@@ -33,6 +41,13 @@ export interface SessionSchedule {
   content: string;
   completed?: boolean;
   isCheckpoint?: boolean;
+  notes?: string;
+  technician?: string;
+  // XÁC NHẬN BUỔI TẬP 2 BÊN (KTV & BỆNH NHÂN)
+  clinicConfirmed?: boolean; // Phía phòng khám / KTV xác nhận
+  clinicConfirmedAt?: string;
+  patientConfirmed?: boolean; // Phía tài khoản bệnh nhân xác nhận
+  patientConfirmedAt?: string;
 }
 
 export interface Treatment {

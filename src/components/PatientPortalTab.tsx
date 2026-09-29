@@ -42,7 +42,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { PatientAvatar, AGE_CATEGORY_MAP, getCategoryByAge, ALL_AVATAR_PRESETS } from './PatientAvatar';
-import { PatientDailyChecklist } from './PatientDailyChecklist';
+import { PatientDailyChecklist, getDefaultDailyTasks } from './PatientDailyChecklist';
 
 interface PatientPortalTabProps {
   patient: Patient;
@@ -55,6 +55,7 @@ interface PatientPortalTabProps {
   onSwitchTab?: (tab: 'overview' | 'exercises' | 'warranty' | 'checklist') => void;
   onRequestMaintenanceAppt?: (patientName: string, service: string, date: string) => void;
   onUpdatePatient?: (updated: Patient) => void;
+  onUpdateTreatment?: (updated: Treatment) => void;
 }
 
 const CHAT_STORAGE_KEY = 'bone_physio_chat_conversations';
@@ -70,6 +71,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   onSwitchTab,
   onRequestMaintenanceAppt,
   onUpdatePatient,
+  onUpdateTreatment,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'exercises' | 'warranty' | 'checklist'>(initialTab);
   const [patientData, setPatientData] = useState<Patient>(patient);
@@ -101,6 +103,125 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
     }
     if (onUpdatePatient) {
       onUpdatePatient(updatedPatient);
+    }
+  };
+
+  const handleAddChecklistTask = (task: any) => {
+    const currentTasks = patientData.dailyChecklist || [];
+    const updatedTasks = [...currentTasks, task];
+    const updatedPatient: Patient = {
+      ...patientData,
+      dailyChecklist: updatedTasks,
+    };
+    setPatientData(updatedPatient);
+    try {
+      const raw = localStorage.getItem('bp_patients');
+      if (raw) {
+        const list = JSON.parse(raw);
+        const nextList = list.map((p: Patient) => (p.id === patient.id ? updatedPatient : p));
+        localStorage.setItem('bp_patients', JSON.stringify(nextList));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    if (onUpdatePatient) {
+      onUpdatePatient(updatedPatient);
+    }
+  };
+
+  const handleConfirmWorkoutSession = (treatmentId: string, sessionNumber: number) => {
+    const targetTreatment = treatments.find((t) => t.id === treatmentId);
+    if (!targetTreatment) return;
+
+    let currentSessions = targetTreatment.sessions || [];
+    const nowStr = new Date().toLocaleString('vi-VN');
+
+    // If targetTreatment has no sessions populated yet, synthesize up to total
+    if (currentSessions.length === 0) {
+      const totalCount = targetTreatment.total || 10;
+      currentSessions = [];
+      for (let i = 1; i <= totalCount; i++) {
+        currentSessions.push({
+          number: i,
+          date: new Date().toISOString().split('T')[0],
+          content: `Buổi ${i}: Liệu trình phục hồi ${targetTreatment.bodyPart}`,
+          completed: i <= targetTreatment.done,
+          clinicConfirmed: i <= targetTreatment.done,
+          patientConfirmed: false,
+        });
+      }
+    }
+
+    const hasMatch = currentSessions.some((s) => s.number === sessionNumber);
+    const updatedSessions = hasMatch
+      ? currentSessions.map((s) => {
+          if (s.number === sessionNumber) {
+            return {
+              ...s,
+              patientConfirmed: true,
+              patientConfirmedAt: nowStr,
+              completed: s.clinicConfirmed ? true : s.completed,
+            };
+          }
+          return s;
+        })
+      : [
+          ...currentSessions,
+          {
+            number: sessionNumber,
+            date: new Date().toISOString().split('T')[0],
+            content: `Buổi ${sessionNumber}: Liệu trình phục hồi ${targetTreatment.bodyPart}`,
+            patientConfirmed: true,
+            patientConfirmedAt: nowStr,
+            completed: false,
+          },
+        ];
+
+    const doneCount = updatedSessions.filter(
+      (s) => s.completed || (s.clinicConfirmed && s.patientConfirmed)
+    ).length;
+
+    const updatedTreatment: Treatment = {
+      ...targetTreatment,
+      sessions: updatedSessions,
+      done: Math.max(targetTreatment.done, doneCount),
+    };
+
+    if (onUpdateTreatment) {
+      onUpdateTreatment(updatedTreatment);
+    }
+  };
+
+  const handleUndoConfirmWorkoutSession = (treatmentId: string, sessionNumber: number) => {
+    const targetTreatment = treatments.find((t) => t.id === treatmentId);
+    if (!targetTreatment) return;
+
+    const currentSessions = targetTreatment.sessions || [];
+
+    const updatedSessions = currentSessions.map((s) => {
+      if (s.number === sessionNumber) {
+        return {
+          ...s,
+          patientConfirmed: false,
+          patientConfirmedAt: undefined,
+          completed: false,
+        };
+      }
+      return s;
+    });
+
+    const doneCount = updatedSessions.filter(
+      (s) => s.completed || (s.clinicConfirmed && s.patientConfirmed)
+    ).length;
+
+    const updatedTreatment: Treatment = {
+      ...targetTreatment,
+      sessions: updatedSessions,
+      done: doneCount,
+    };
+
+    if (onUpdateTreatment) {
+      onUpdateTreatment(updatedTreatment);
     }
   };
 
@@ -303,9 +424,34 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   // List of exercises to display depending on filter
   const displayedExercises = exerciseFilter === 'assigned' ? assignedExs : exercises;
 
-    const checklist = patientData.dailyChecklist || [];
+    const checklist =
+      patientData.dailyChecklist && patientData.dailyChecklist.length > 0
+        ? patientData.dailyChecklist
+        : getDefaultDailyTasks(patientData);
     const completedChecklistCount = checklist.filter((i) => i.isCompleted).length;
-    const totalChecklistCount = checklist.length || 4;
+    const totalChecklistCount = checklist.length;
+
+    const effectiveMetrics =
+      patient.healthMetrics && patient.healthMetrics.length > 0
+        ? patient.healthMetrics
+        : [
+            {
+              id: `HM_BASE_${patient.id}`,
+              date: patient.firstVisitDateTime ? patient.firstVisitDateTime.split('T')[0] : new Date().toISOString().split('T')[0],
+              painScore: 5,
+              rangeOfMotion: 'Hạn chế 30% khi gập/xoay',
+              muscleStrength: '4/5',
+              bloodPressure: '120/80 mmHg',
+              heartRate: '76 bpm',
+              spo2: '98%',
+              weight: 60,
+              height: 165,
+              bmi: '22.0',
+              functionalScore: 'ODI 20% (Mức độ vừa)',
+              jointCircumference: '36 cm',
+              notes: `Chỉ số khám lâm sàng ban đầu của Bác sĩ cho vùng ${patient.bodyPart}`,
+            },
+          ];
 
     const categoryInfo = (patientData.avatarType && AGE_CATEGORY_MAP[patientData.avatarType])
       ? AGE_CATEGORY_MAP[patientData.avatarType]
@@ -525,36 +671,13 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
       {/* VIEW 1: OVERVIEW TAB */}
       {activeSubTab === 'overview' && (
         <div className="space-y-6">
-          {/* Top Quick Action Banner: Việc Cần Làm Hôm Nay */}
-          <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-100/60 p-5 rounded-3xl border border-amber-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <span className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-amber-500/25 flex-shrink-0">
-                📋
-              </span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-slate-900">
-                    Kế Hoạch & Việc Bạn Cần Làm Hôm Nay
-                  </h3>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
-                    {completedChecklistCount}/{totalChecklistCount} hoàn thành
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Thực hiện đúng thói quen tư thế, bài tập trị liệu và lời dặn của Bác sĩ theo phác đồ độ tuổi
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('checklist')}
-              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition flex items-center justify-center space-x-1.5 self-start md:self-auto cursor-pointer"
-            >
-              <ListTodo className="w-4 h-4" />
-              <span>Xem & Đánh Dấu Chi Tiết</span>
-            </button>
-          </div>
+          {/* Mục Việc Cần Làm Hôm Nay & Lời Nhắc Đầu Ngày */}
+          <PatientDailyChecklist
+            patient={patientData}
+            exercises={exercises}
+            onToggleTask={handleToggleChecklistTask}
+            onAddTask={handleAddChecklistTask}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column: EMR Detail & Progression & Treatments */}
@@ -615,33 +738,337 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               )}
             </div>
 
+            {/* XÁC NHẬN BUỔI TẬP HÔM NAY TỪ PHÍA BỆNH NHÂN */}
+            {primaryTreatment && (
+              <div className="bg-gradient-to-br from-indigo-50/90 via-blue-50/60 to-white p-5 rounded-3xl border border-indigo-200 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-100 pb-3">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-600/25 flex-shrink-0">
+                      <Flame className="w-5 h-5 text-amber-300" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                        <span>Xác Nhận Buổi Tập Phục Hồi Hôm Nay</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                          {primaryTreatment.bodyPart}
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Xác nhận 2 chiều giữa Bệnh nhân và Kỹ thuật viên (KTV) sau mỗi buổi tập để bảo đảm quyền lợi và minh bạch liệu trình.
+                      </p>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const sessions = primaryTreatment.sessions || [];
+                    const activeSession =
+                      sessions.find((s) => !s.patientConfirmed || !s.clinicConfirmed) ||
+                      sessions[sessions.length - 1] ||
+                      {
+                        number: Math.min(primaryTreatment.done + 1, primaryTreatment.total),
+                        content: `Buổi ${Math.min(primaryTreatment.done + 1, primaryTreatment.total)}: Trị liệu ${primaryTreatment.bodyPart}`,
+                        date: new Date().toISOString().split('T')[0],
+                        patientConfirmed: false,
+                        clinicConfirmed: false,
+                      };
+
+                    const hasPatientConfirmed = Boolean(activeSession.patientConfirmed);
+                    const hasClinicConfirmed = Boolean(activeSession.clinicConfirmed);
+                    const isDualConfirmed = hasPatientConfirmed && hasClinicConfirmed;
+                    const isMismatch = (hasPatientConfirmed && !hasClinicConfirmed) || (!hasPatientConfirmed && hasClinicConfirmed);
+
+                    return (
+                      <div className="flex flex-col items-start sm:items-end flex-shrink-0">
+                        {isDualConfirmed ? (
+                          <span className="px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold flex items-center space-x-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Đã xác nhận 2 bên ✅</span>
+                          </span>
+                        ) : isMismatch ? (
+                          <span className="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-bold flex items-center space-x-1 animate-pulse">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Chờ xác nhận đối soát ⚠️</span>
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-slate-100 text-slate-600 border border-slate-200 rounded-full text-xs font-semibold">
+                            Chưa ấn xác nhận hôm nay
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {(() => {
+                  const sessions = primaryTreatment.sessions || [];
+                  const activeSession =
+                    sessions.find((s) => !s.patientConfirmed || !s.clinicConfirmed) ||
+                    sessions[sessions.length - 1] ||
+                    {
+                      number: Math.min(primaryTreatment.done + 1, primaryTreatment.total),
+                      content: `Buổi ${Math.min(primaryTreatment.done + 1, primaryTreatment.total)}: Trị liệu ${primaryTreatment.bodyPart} chuyên sâu`,
+                      date: new Date().toISOString().split('T')[0],
+                      patientConfirmed: false,
+                      clinicConfirmed: false,
+                    };
+
+                  const hasPatientConfirmed = Boolean(activeSession.patientConfirmed);
+                  const hasClinicConfirmed = Boolean(activeSession.clinicConfirmed);
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="bg-white p-3.5 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div>
+                          <div className="font-bold text-slate-900">
+                            Buổi {activeSession.number}/{primaryTreatment.total}: {activeSession.content}
+                          </div>
+                          <div className="text-slate-500 text-[11px] mt-0.5">
+                            Ngày diễn ra: <strong>{activeSession.date || 'Hôm nay'}</strong>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold border flex items-center space-x-1 ${
+                            hasPatientConfirmed
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}>
+                            <span>Bệnh nhân:</span>
+                            <strong>{hasPatientConfirmed ? 'Đã ấn ✅' : 'Chưa ấn'}</strong>
+                          </div>
+
+                          <div className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold border flex items-center space-x-1 ${
+                            hasClinicConfirmed
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}>
+                            <span>KTV Phòng Khám:</span>
+                            <strong>{hasClinicConfirmed ? 'Đã duyệt ✅' : 'Chưa duyệt'}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Warning notice if mismatch */}
+                      {((hasPatientConfirmed && !hasClinicConfirmed) || (!hasPatientConfirmed && hasClinicConfirmed)) && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 flex items-start space-x-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <strong>Lưu ý đối soát:</strong> Buổi tập này mới chỉ có một bên xác nhận ({hasPatientConfirmed ? 'Bệnh nhân đã ấn nhưng KTV chưa duyệt' : 'KTV đã duyệt nhưng bạn chưa ấn'}). Hệ thống đã kích hoạt cảnh báo thông báo ngay cho Ban Quản Trị / Bác Sĩ để kiểm tra và đối soát đồng bộ!
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {!hasPatientConfirmed ? (
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmWorkoutSession(primaryTreatment.id, activeSession.number)}
+                            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 transition flex items-center space-x-2 cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Xác Nhận Hôm Nay Tôi Đã Tập Buổi Này</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleUndoConfirmWorkoutSession(primaryTreatment.id, activeSession.number)}
+                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer"
+                          >
+                            Hủy Xác Nhận (Nếu Ấn Nhầm)
+                          </button>
+                        )}
+                        {activeSession.patientConfirmedAt && (
+                          <span className="text-[11px] text-slate-400 italic">
+                            Xác nhận lúc: {activeSession.patientConfirmedAt}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* CÁC CHỈ SỐ LÂM SÀNG BAN ĐẦU CỦA BÁC SĨ (Baseline Metrics) */}
+            <div className="bg-gradient-to-r from-blue-50 via-indigo-50/60 to-purple-50/40 p-5 rounded-3xl border border-blue-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2.5">
+                  <span className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                    <HeartPulse className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">
+                      Chỉ Số Khám Lâm Sàng Ban Đầu Của Bác Sĩ (Baseline Metrics)
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Được ghi nhận tại buổi khám đầu tiên ({effectiveMetrics[0]?.date || patient.firstVisitDateTime || 'Ban đầu'}) để làm mốc đối chiếu tiến trình hồi phục
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200 font-mono">
+                  Mốc Khám Ban Đầu
+                </span>
+              </div>
+
+              {/* Grid of All Initial Baseline Indicators */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-blue-700 uppercase block">Thang Đau Ban Đầu (VAS)</span>
+                  <div className="text-base font-black text-rose-600 mt-1">
+                    {effectiveMetrics[0]?.painScore}/10
+                  </div>
+                  <span className="text-[10px] text-slate-500">
+                    {effectiveMetrics[0]?.painScore >= 7 ? 'Đau dữ dội' : effectiveMetrics[0]?.painScore >= 4 ? 'Đau mức độ vừa' : 'Đau nhẹ'}
+                  </span>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-indigo-700 uppercase block">Tầm Vận Động (ROM)</span>
+                  <div className="text-xs font-bold text-indigo-950 mt-1 truncate">
+                    {effectiveMetrics[0]?.rangeOfMotion || 'Hạn chế 30%'}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Biên độ ban đầu</span>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase block">Sức Cơ Ban Đầu (MMT)</span>
+                  <div className="text-base font-black text-emerald-900 mt-1">
+                    {effectiveMetrics[0]?.muscleStrength || '4/5'}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Thang cơ MMT (0-5)</span>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase block">Huyết Áp & Nhịp Tim</span>
+                  <div className="text-xs font-bold text-amber-950 mt-1">
+                    {effectiveMetrics[0]?.bloodPressure || '120/80 mmHg'}
+                  </div>
+                  <span className="text-[10px] text-slate-500">
+                    Mạch: {effectiveMetrics[0]?.heartRate || '76 bpm'}
+                  </span>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-cyan-800 uppercase block">Độ Bão Hòa SpO2</span>
+                  <div className="text-base font-black text-cyan-900 mt-1">
+                    {effectiveMetrics[0]?.spo2 || '98%'}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Bình thường an toàn</span>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-700 uppercase block">Thể Trạng & BMI</span>
+                  <div className="text-xs font-bold text-slate-900 mt-1">
+                    {effectiveMetrics[0]?.weight ? `${effectiveMetrics[0].weight}kg` : '60kg'} • {effectiveMetrics[0]?.height ? `${effectiveMetrics[0].height}cm` : '165cm'}
+                  </div>
+                  <span className="text-[10px] text-slate-500">
+                    BMI: <strong>{effectiveMetrics[0]?.bmi || '22.0'}</strong>
+                  </span>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-purple-700 uppercase block">Thang Điểm Khuyết Tật</span>
+                  <div className="text-xs font-bold text-purple-950 mt-1 truncate">
+                    {effectiveMetrics[0]?.functionalScore || 'ODI 20% (Mức vừa)'}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Đánh giá sinh hoạt</span>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-teal-700 uppercase block">Chu Vi Vòng Khớp</span>
+                  <div className="text-xs font-bold text-teal-950 mt-1">
+                    {effectiveMetrics[0]?.jointCircumference || '36 cm'}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Độ sưng nề ban đầu</span>
+                </div>
+              </div>
+
+              {effectiveMetrics[0]?.notes && (
+                <div className="p-3 bg-white/90 rounded-2xl border border-blue-100 text-xs text-slate-700">
+                  <strong className="text-blue-900 block mb-0.5">Lời dặn & Mục tiêu của Bác sĩ:</strong>
+                  <span>{effectiveMetrics[0].notes}</span>
+                </div>
+              )}
+            </div>
+
             {/* Health metrics table */}
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                 <Activity className="w-4 h-4 text-blue-600" />
-                <span>Bảng Theo Dõi Chỉ Số Tiến Triển Qua Các Buổi Khám</span>
+                <span>Bảng Theo Dõi Các Chỉ Số Lâm Sàng &amp; Tiến Triển Hồi Phục</span>
               </h4>
+
+              {/* Stat Comparison Cards */}
+              {effectiveMetrics.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-blue-50/80 p-3 rounded-2xl border border-blue-100 text-xs">
+                    <span className="text-[10px] text-blue-700 font-bold uppercase block">Mức độ đau (VAS)</span>
+                    <div className="text-base font-black text-blue-950 mt-1">
+                      {effectiveMetrics[effectiveMetrics.length - 1]?.painScore}/10
+                    </div>
+                    <span className="text-[10px] text-slate-500">
+                      Ban đầu: {effectiveMetrics[0]?.painScore}/10
+                    </span>
+                  </div>
+
+                  <div className="bg-emerald-50/80 p-3 rounded-2xl border border-emerald-100 text-xs">
+                    <span className="text-[10px] text-emerald-700 font-bold uppercase block">Sức cơ (MMT)</span>
+                    <div className="text-base font-black text-emerald-950 mt-1">
+                      {effectiveMetrics[effectiveMetrics.length - 1]?.muscleStrength || '4/5'}
+                    </div>
+                    <span className="text-[10px] text-slate-500">
+                      Ban đầu: {effectiveMetrics[0]?.muscleStrength || '3/5'}
+                    </span>
+                  </div>
+
+                  <div className="bg-purple-50/80 p-3 rounded-2xl border border-purple-100 text-xs">
+                    <span className="text-[10px] text-purple-700 font-bold uppercase block">Tầm Vận Động (ROM)</span>
+                    <div className="text-xs font-bold text-purple-950 mt-1 truncate">
+                      {effectiveMetrics[effectiveMetrics.length - 1]?.rangeOfMotion || '85%'}
+                    </div>
+                    <span className="text-[10px] text-slate-500">
+                      Ban đầu: {effectiveMetrics[0]?.rangeOfMotion || '50%'}
+                    </span>
+                  </div>
+
+                  <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-100 text-xs">
+                    <span className="text-[10px] text-amber-800 font-bold uppercase block">Huyết Áp &amp; SpO2</span>
+                    <div className="text-xs font-bold text-amber-950 mt-1">
+                      {effectiveMetrics[effectiveMetrics.length - 1]?.bloodPressure || '120/80'}
+                    </div>
+                    <span className="text-[10px] text-slate-500">
+                      SpO2: {effectiveMetrics[effectiveMetrics.length - 1]?.spo2 || '98%'}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                        <th className="py-3 px-4">Ngày</th>
-                        <th className="py-3 px-4">Thang Đau</th>
-                        <th className="py-3 px-4">Biên Độ (ROM)</th>
-                        <th className="py-3 px-4">Huyết Áp</th>
-                        <th className="py-3 px-4">Ghi Chú Tiến Triển</th>
+                        <th className="py-3 px-3">Ngày</th>
+                        <th className="py-3 px-3">Thang Đau (VAS)</th>
+                        <th className="py-3 px-3">Biên Độ (ROM)</th>
+                        <th className="py-3 px-3">Sức Cơ (MMT)</th>
+                        <th className="py-3 px-3">Huyết Áp &amp; Mạch</th>
+                        <th className="py-3 px-3">SpO2</th>
+                        <th className="py-3 px-3">Cân Nặng / BMI</th>
+                        <th className="py-3 px-3">Điểm Chức Năng</th>
+                        <th className="py-3 px-3">Vòng Khớp</th>
+                        <th className="py-3 px-3">Ghi Chú Của Bác Sĩ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {patient.healthMetrics && patient.healthMetrics.length > 0 ? (
-                        patient.healthMetrics.map((hm) => (
+                      {effectiveMetrics.length > 0 ? (
+                        effectiveMetrics.map((hm) => (
                           <tr key={hm.id} className="hover:bg-slate-50/60">
-                            <td className="py-3 px-4 font-semibold text-slate-800">
+                            <td className="py-3 px-3 font-semibold text-slate-800 whitespace-nowrap">
                               {hm.date}
                             </td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-3">
                               <span
                                 className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                                   hm.painScore <= 3
@@ -654,21 +1081,36 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                                 Điểm {hm.painScore}/10
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-slate-600">
+                            <td className="py-3 px-3 text-slate-600">
                               {hm.rangeOfMotion || 'Bình thường'}
                             </td>
-                            <td className="py-3 px-4 text-slate-600">
+                            <td className="py-3 px-3 font-semibold text-indigo-700">
+                              {hm.muscleStrength || '-'}
+                            </td>
+                            <td className="py-3 px-3 font-mono text-slate-600">
                               {hm.bloodPressure || '120/80 mmHg'}
                             </td>
-                            <td className="py-3 px-4 text-slate-500 italic max-w-xs truncate">
+                            <td className="py-3 px-3 font-semibold text-cyan-700">
+                              {hm.spo2 || '-'}
+                            </td>
+                            <td className="py-3 px-3 text-slate-600">
+                              {hm.weight ? `${hm.weight}kg` : ''} {hm.bmi ? `(${hm.bmi})` : '-'}
+                            </td>
+                            <td className="py-3 px-3 text-amber-800 font-medium">
+                              {hm.functionalScore || '-'}
+                            </td>
+                            <td className="py-3 px-3 text-slate-600">
+                              {hm.jointCircumference || '-'}
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 italic max-w-xs truncate">
                               {hm.notes}
                             </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={5} className="py-4 text-center text-slate-400 italic">
-                            Chưa có dữ liệu chỉ số khám.
+                          <td colSpan={10} className="py-4 text-center text-slate-400 italic">
+                            Chưa có dữ liệu chỉ số khám ban đầu.
                           </td>
                         </tr>
                       )}
@@ -1583,6 +2025,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
           <PatientDailyChecklist
             patient={patientData}
             onToggleTask={handleToggleChecklistTask}
+            onAddTask={handleAddChecklistTask}
           />
         </div>
       )}

@@ -79,6 +79,13 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   const [metricRom, setMetricRom] = useState('Bình thường 85%');
   const [metricBp, setMetricBp] = useState('120/80 mmHg');
   const [metricBmi, setMetricBmi] = useState('22.8');
+  const [metricMuscleStrength, setMetricMuscleStrength] = useState('4/5');
+  const [metricSpo2, setMetricSpo2] = useState('98%');
+  const [metricHeartRate, setMetricHeartRate] = useState('76 bpm');
+  const [metricWeight, setMetricWeight] = useState<number | undefined>(62);
+  const [metricHeight, setMetricHeight] = useState<number | undefined>(165);
+  const [metricFunctionalScore, setMetricFunctionalScore] = useState('ODI 18% (Mức nhẹ)');
+  const [metricJointCircumference, setMetricJointCircumference] = useState('36 cm');
   const [metricNotes, setMetricNotes] = useState(
     'Bệnh nhân đáp ứng tốt với liệu trình, giảm co cứng cơ.'
   );
@@ -115,7 +122,65 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
     setTimeout(() => setIsRevisitSaved(false), 3000);
   };
 
+  const handleClearEmptyEMR = () => {
+    if (!patient) return;
+    const cleanedPatient: Patient = {
+      ...patient,
+      chiefComplaint: undefined,
+      presentIllness: undefined,
+      presentIllnessDetails: undefined,
+      pastMedicalHistory: undefined,
+      surgicalInterventions: undefined,
+      surgicalHistory: undefined,
+      hasSurgery: false,
+      allergies: undefined,
+      habits: undefined,
+      hasFamilyHistory: false,
+      familyMembers: undefined,
+      familyHistory: undefined,
+      preliminaryDiagnosis: undefined,
+      differentialDiagnoses: undefined,
+    };
+    onUpdatePatient(cleanedPatient);
+  };
+
   if (!isOpen || !patient) return null;
+
+  const hasPresentIllnessData = Boolean(
+    patient.presentIllnessDetails?.onset ||
+    patient.presentIllnessDetails?.painCharacteristics ||
+    patient.presentIllnessDetails?.radiation ||
+    patient.presentIllnessDetails?.aggravatingRelieving ||
+    patient.presentIllnessDetails?.priorInterventions ||
+    (patient.presentIllnessDetails?.additionalPainNotes && patient.presentIllnessDetails.additionalPainNotes.length > 0) ||
+    (patient.presentIllnessDetails?.additionalInterventions && patient.presentIllnessDetails.additionalInterventions.length > 0)
+  );
+
+  const hasPastMedicalData = Boolean(
+    patient.pastMedicalHistory?.hypertension ||
+    patient.pastMedicalHistory?.diabetes ||
+    (patient.pastMedicalHistory?.otherConditions && patient.pastMedicalHistory.otherConditions.length > 0) ||
+    patient.pastMedicalHistory?.otherDisease ||
+    (patient.surgicalInterventions && patient.surgicalInterventions.length > 0) ||
+    patient.surgicalHistory ||
+    patient.allergies?.hasDrugAllergy ||
+    (patient.allergies?.drugAllergies && patient.allergies.drugAllergies.length > 0) ||
+    patient.allergies?.hasFoodAllergy ||
+    (patient.allergies?.foodAllergies && patient.allergies.foodAllergies.length > 0) ||
+    patient.habits?.exerciseLimited ||
+    patient.habits?.exerciseLittle ||
+    patient.habits?.greasyFood ||
+    patient.habits?.vegetarian ||
+    patient.habits?.highSalt ||
+    patient.habits?.alcoholHeavy ||
+    patient.habits?.lowWater ||
+    patient.habits?.sedentaryJob ||
+    (patient.habits?.customHabits && patient.habits.customHabits.length > 0) ||
+    (patient.familyMembers && patient.familyMembers.length > 0) ||
+    patient.familyHistory
+  );
+
+  const hasAnyEMRClinicalData = hasPresentIllnessData || hasPastMedicalData || Boolean(patient.chiefComplaint) || Boolean(patient.preliminaryDiagnosis);
 
   const patientTreatments = treatments.filter(
     (t) => t.patientId === patient.id || t.patientName === patient.name
@@ -130,6 +195,13 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
       rangeOfMotion: metricRom,
       bloodPressure: metricBp,
       bmi: metricBmi,
+      muscleStrength: metricMuscleStrength,
+      spo2: metricSpo2,
+      heartRate: metricHeartRate,
+      weight: metricWeight,
+      height: metricHeight,
+      functionalScore: metricFunctionalScore,
+      jointCircumference: metricJointCircumference,
       notes: metricNotes,
     };
     const updatedMetrics = [...(patient.healthMetrics || []), newMetric].sort(
@@ -598,7 +670,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   <h5 className="text-xs font-bold text-blue-900">
                     Thêm Chỉ Số Khám / Đo Lường Mới
                   </h5>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                         Ngày khám
@@ -613,7 +685,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Thang đau (NRS 0-10)
+                        Thang đau (VAS/NRS 0-10)
                       </label>
                       <input
                         type="number"
@@ -627,11 +699,37 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Huyết áp
+                        Tầm vận động (ROM)
                       </label>
                       <input
                         type="text"
                         required
+                        placeholder="VD: Gập 45°, Duỗi 10°"
+                        value={metricRom}
+                        onChange={(e) => setMetricRom(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Sức cơ (MMT 1-5)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="VD: 4/5"
+                        value={metricMuscleStrength}
+                        onChange={(e) => setMetricMuscleStrength(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Huyết áp & Mạch
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="120/80 mmHg - 75 bpm"
                         value={metricBp}
                         onChange={(e) => setMetricBp(e.target.value)}
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -639,15 +737,36 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Biên độ (ROM)
+                        SpO2 (%)
                       </label>
                       <input
                         type="text"
-                        required
-                        value={metricRom}
-                        onChange={(e) => setMetricRom(e.target.value)}
+                        placeholder="98%"
+                        value={metricSpo2}
+                        onChange={(e) => setMetricSpo2(e.target.value)}
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Cân nặng (kg) & Chiều cao
+                      </label>
+                      <div className="flex space-x-1">
+                        <input
+                          type="number"
+                          placeholder="Kg"
+                          value={metricWeight || ''}
+                          onChange={(e) => setMetricWeight(Number(e.target.value))}
+                          className="w-1/2 px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Cm"
+                          value={metricHeight || ''}
+                          onChange={(e) => setMetricHeight(Number(e.target.value))}
+                          className="w-1/2 px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">
@@ -660,11 +779,35 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Điểm chức năng (ODI/NDI)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="VD: ODI 20%"
+                        value={metricFunctionalScore}
+                        onChange={(e) => setMetricFunctionalScore(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Chu vi vòng khớp/chi
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="VD: 36 cm (Gối)"
+                        value={metricJointCircumference}
+                        onChange={(e) => setMetricJointCircumference(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Đánh giá tiến triển của Bác sĩ
+                      Đánh giá tiến triển của Bác sĩ / KTV
                     </label>
                     <input
                       type="text"
@@ -699,22 +842,26 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        <th className="py-3 px-4">Ngày Khám EMR</th>
-                        <th className="py-3 px-4">Thang Đau (NRS)</th>
-                        <th className="py-3 px-4">Biên Độ (ROM)</th>
-                        <th className="py-3 px-4">Huyết Áp</th>
-                        <th className="py-3 px-4">BMI</th>
-                        <th className="py-3 px-4">Đánh Giá Tiến Triển</th>
+                        <th className="py-3 px-3">Ngày Khám</th>
+                        <th className="py-3 px-3">Thang Đau (VAS)</th>
+                        <th className="py-3 px-3">Biên Độ (ROM)</th>
+                        <th className="py-3 px-3">Sức Cơ (MMT)</th>
+                        <th className="py-3 px-3">Huyết Áp & Mạch</th>
+                        <th className="py-3 px-3">SpO2</th>
+                        <th className="py-3 px-3">Cân Nặng / BMI</th>
+                        <th className="py-3 px-3">Điểm Chức Năng</th>
+                        <th className="py-3 px-3">Chu Vi Khớp</th>
+                        <th className="py-3 px-3">Đánh Giá Tiến Triển</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {patient.healthMetrics && patient.healthMetrics.length > 0 ? (
                         patient.healthMetrics.map((m) => (
                           <tr key={m.id} className="hover:bg-slate-50/80">
-                            <td className="py-3 px-4 font-semibold text-slate-900">
+                            <td className="py-3 px-3 font-semibold text-slate-900 whitespace-nowrap">
                               {m.date}
                             </td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-3">
                               <span
                                 className={`px-2 py-0.5 rounded-lg font-bold text-xs ${
                                   m.painScore >= 7
@@ -727,16 +874,22 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                                 {m.painScore}/10
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-slate-700">{m.rangeOfMotion}</td>
-                            <td className="py-3 px-4 font-mono text-slate-600">{m.bloodPressure}</td>
-                            <td className="py-3 px-4 text-slate-600">{m.bmi || '-'}</td>
-                            <td className="py-3 px-4 text-slate-600 italic">{m.notes}</td>
+                            <td className="py-3 px-3 text-slate-700">{m.rangeOfMotion}</td>
+                            <td className="py-3 px-3 font-semibold text-indigo-700">{m.muscleStrength || '-'}</td>
+                            <td className="py-3 px-3 font-mono text-slate-600">{m.bloodPressure || '-'}</td>
+                            <td className="py-3 px-3 text-cyan-700 font-semibold">{m.spo2 || '-'}</td>
+                            <td className="py-3 px-3 text-slate-600">
+                              {m.weight ? `${m.weight}kg` : ''} {m.bmi ? `(BMI: ${m.bmi})` : '-'}
+                            </td>
+                            <td className="py-3 px-3 text-amber-800 font-medium">{m.functionalScore || '-'}</td>
+                            <td className="py-3 px-3 text-slate-700">{m.jointCircumference || '-'}</td>
+                            <td className="py-3 px-3 text-slate-600 italic">{m.notes}</td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="py-6 text-center text-slate-400 italic">
-                            Chưa có chỉ số đo lường nào.
+                          <td colSpan={10} className="py-6 text-center text-slate-400 italic">
+                            Chưa có chỉ số đo lường nào. Bấm "+ Thêm Chỉ Số Đo Lường" ở trên để ghi nhận.
                           </td>
                         </tr>
                       )}
@@ -763,364 +916,389 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsEditEMROpen(true)}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 self-start sm:self-auto shadow-sm active:scale-95"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Cập Nhật Bệnh Án</span>
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={handleClearEmptyEMR}
+                    className="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 active:scale-95 shadow-2xs"
+                    title="Xóa bỏ các trường bệnh án trống không có thông tin để làm gọn"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Xóa Dữ Liệu Bệnh Án Trống</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditEMROpen(true)}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Cập Nhật Bệnh Án</span>
+                  </button>
+                </div>
               </div>
 
               {/* PHÂN HỆ I & II: HÀNH CHÍNH & LÝ DO ĐẾN KHÁM */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* I. Hành chính */}
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
-                  <h5 className="font-bold text-slate-900 uppercase tracking-wider flex items-center text-[11px] text-blue-700">
-                    <User className="w-3.5 h-3.5 mr-1.5" />
-                    Phần I. Thông Tin Hành Chính
-                  </h5>
-                  <div className="grid grid-cols-2 gap-2 text-slate-700">
-                    <p><strong>Họ và tên:</strong> {patient.name}</p>
-                    <p><strong>Số điện thoại:</strong> {patient.phone}</p>
-                    <p><strong>Tuổi &amp; Giới tính:</strong> {patient.age} tuổi ({patient.gender})</p>
-                    <p><strong>Nghề nghiệp:</strong> {patient.occupation || 'Tự do / Chưa ghi'}</p>
-                    <p className="col-span-2">
-                      <strong>Ngày giờ đầu tiên đến khám:</strong> {patient.firstVisitDateTime || 'Chưa ghi'}
-                    </p>
-                    <p className="col-span-2 text-blue-700 font-semibold">
-                      <strong>Vùng thăm khám chính:</strong> {patient.bodyPart}
-                    </p>
-                  </div>
-                </div>
-
-                {/* II. Lý do đến khám */}
-                <div className="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-2xs space-y-2 text-xs bg-amber-50/20">
-                  <h5 className="font-bold text-amber-900 uppercase tracking-wider flex items-center text-[11px]">
-                    <AlertTriangle className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
-                    Phần II. Lý Do Đến Khám
-                  </h5>
-                  <p className="text-slate-500 text-[11px]">
-                    Triệu chứng chính khiến người bệnh nhập viện hoặc đến khám:
-                  </p>
-                  <p className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl text-amber-950 font-medium leading-relaxed italic">
-                    "{patient.chiefComplaint || patient.history || 'Đau mỏi cơ xương khớp'}"
-                  </p>
-                </div>
-              </div>
-
-              {/* PHÂN HỆ III: BỆNH SỬ CỦA BỆNH NHÂN (5 YẾU TỐ) */}
-              <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-2xs space-y-3 text-xs">
-                <h5 className="font-bold text-slate-900 uppercase tracking-wider flex items-center text-[11px] text-blue-700">
-                  <Activity className="w-3.5 h-3.5 mr-1.5" />
-                  Phần III. Bệnh Sử Của Bệnh Nhân (Quá Trình &amp; Tính Chất Đau)
-                </h5>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="text-slate-900 block mb-0.5">1. Quá trình khởi phát:</strong>
-                    <p className="text-slate-600">
-                      {patient.presentIllnessDetails?.onset || 'Xuất hiện sau sai tư thế hoặc vận động nặng, diễn biến tăng dần.'}
-                    </p>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="text-slate-900 block mb-0.5">2. Tính chất cơn đau:</strong>
-                    <p className="text-slate-600">
-                      {patient.presentIllnessDetails?.painCharacteristics || 'Đau âm ỉ liên tục, nhói buốt khi gập cúi hoặc chịu lực.'}
-                    </p>
-                    {patient.presentIllnessDetails?.additionalPainNotes && patient.presentIllnessDetails.additionalPainNotes.length > 0 && (
-                      <div className="pt-1.5 flex flex-wrap gap-1">
-                        {patient.presentIllnessDetails.additionalPainNotes.map((note, idx) => (
-                          <span key={idx} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700 font-medium">
-                            + {note}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="text-slate-900 block mb-0.5">3. Hướng lan:</strong>
-                    <p className="text-slate-600">
-                      {patient.presentIllnessDetails?.radiation || 'Khu trú tại chỗ, thỉnh thoảng lan theo đường đi của rễ thần kinh.'}
-                    </p>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="text-slate-900 block mb-0.5">4. Yếu tố tăng / giảm đau:</strong>
-                    <p className="text-slate-600">
-                      {patient.presentIllnessDetails?.aggravatingRelieving || 'Tăng khi ngồi lâu hoặc đứng nhiều; giảm khi nằm nghỉ ngơi.'}
-                    </p>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 sm:col-span-2">
-                    <strong className="text-slate-900 block mb-0.5">5. Các can thiệp trước đó:</strong>
-                    <p className="text-slate-600">
-                      {patient.presentIllnessDetails?.priorInterventions || patient.history || 'Đã dùng thuốc giảm đau hoặc châm cứu nhưng đỡ ít.'}
-                    </p>
-                    {patient.presentIllnessDetails?.additionalInterventions && patient.presentIllnessDetails.additionalInterventions.length > 0 && (
-                      <div className="pt-1.5 flex flex-wrap gap-1">
-                        {patient.presentIllnessDetails.additionalInterventions.map((interv, idx) => (
-                          <span key={idx} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700 font-medium">
-                            + {interv}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* PHÂN HỆ IV: TIỀN CĂN TOÀN DIỆN */}
-              <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 text-xs">
-                <h5 className="font-bold text-slate-900 uppercase tracking-wider flex items-center text-[11px] text-rose-700">
-                  <HeartPulse className="w-3.5 h-3.5 mr-1.5" />
-                  Phần IV. Tiền Căn Toàn Diện
-                </h5>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* 1. Nội khoa */}
-                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
-                      <span>1. Tiền căn Nội khoa:</span>
-                      <span className="text-[10px] text-blue-600 font-semibold">Tăng HA &amp; ĐTĐ &amp; Khác</span>
-                    </h6>
-
-                    <div className="space-y-1.5 text-slate-700 text-xs">
-                      <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
-                        <span className="font-semibold">Tăng huyết áp:</span>
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${patient.pastMedicalHistory?.hypertension ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {patient.pastMedicalHistory?.hypertension ? 'CÓ' : 'KHÔNG'}
-                        </span>
-                      </div>
-                      {patient.pastMedicalHistory?.hypertension && (
-                        <p className="text-[11px] text-slate-500 pl-2">
-                          • Nơi chẩn đoán: {patient.pastMedicalHistory.hypertensionDiagnosedAt || 'Bệnh viện'}
-                          {patient.pastMedicalHistory.hypertensionMedication ? ` | Thuốc: ${patient.pastMedicalHistory.hypertensionMedication}` : ''}
+                    {/* I. Hành chính */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
+                      <h5 className="font-bold text-slate-900 uppercase tracking-wider flex items-center text-[11px] text-blue-700">
+                        <User className="w-3.5 h-3.5 mr-1.5" />
+                        Phần I. Thông Tin Hành Chính
+                      </h5>
+                      <div className="grid grid-cols-2 gap-2 text-slate-700">
+                        <p><strong>Họ và tên:</strong> {patient.name}</p>
+                        <p><strong>Số điện thoại:</strong> {patient.phone}</p>
+                        <p><strong>Tuổi &amp; Giới tính:</strong> {patient.age} tuổi ({patient.gender})</p>
+                        <p><strong>Nghề nghiệp:</strong> {patient.occupation || 'Tự do / Chưa ghi'}</p>
+                        <p className="col-span-2">
+                          <strong>Ngày giờ đầu tiên đến khám:</strong> {patient.firstVisitDateTime || 'Chưa ghi'}
                         </p>
-                      )}
-
-                      <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
-                        <span className="font-semibold">Đái tháo đường:</span>
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${patient.pastMedicalHistory?.diabetes ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
-                          {patient.pastMedicalHistory?.diabetes ? 'CÓ' : 'KHÔNG'}
-                        </span>
-                      </div>
-                      {patient.pastMedicalHistory?.diabetes && (
-                        <p className="text-[11px] text-slate-500 pl-2">
-                          • Nơi chẩn đoán: {patient.pastMedicalHistory.diabetesDiagnosedAt || 'Bệnh viện'}
-                          {patient.pastMedicalHistory.diabetesMedication ? ` | Thuốc: ${patient.pastMedicalHistory.diabetesMedication}` : ''}
+                        <p className="col-span-2 text-blue-700 font-semibold">
+                          <strong>Vùng thăm khám chính:</strong> {patient.bodyPart}
                         </p>
-                      )}
+                      </div>
+                    </div>
 
-                      {/* Các bệnh nội khoa khác */}
-                      {patient.pastMedicalHistory?.otherConditions && patient.pastMedicalHistory.otherConditions.length > 0 ? (
-                        <div className="pt-1 space-y-1">
-                          <p className="font-semibold text-slate-800 text-[11px]">Bệnh nội khoa khác:</p>
-                          {patient.pastMedicalHistory.otherConditions.map((c, i) => (
-                            <div key={c.id || i} className="p-2 bg-white rounded-lg border border-slate-100 text-[11px]">
-                              <strong>+ {c.name}</strong>
-                              {c.diagnosedAt && <span className="text-slate-500"> ({c.diagnosedAt})</span>}
-                              {c.currentMedications && <p className="text-slate-500 mt-0.5">• Thuốc: {c.currentMedications}</p>}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        patient.pastMedicalHistory?.otherDisease && (
-                          <p className="text-[11px] text-slate-600 pl-2">
-                            • Bệnh nội khoa khác: {patient.pastMedicalHistory.otherDisease}
-                          </p>
-                        )
-                      )}
+                    {/* II. Lý do đến khám */}
+                    <div className="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-2xs space-y-2 text-xs bg-amber-50/20">
+                      <h5 className="font-bold text-amber-900 uppercase tracking-wider flex items-center text-[11px]">
+                        <AlertTriangle className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                        Phần II. Lý Do Đến Khám
+                      </h5>
+                      <p className="text-slate-500 text-[11px]">
+                        Triệu chứng chính khiến người bệnh nhập viện hoặc đến khám:
+                      </p>
+                      <p className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl text-amber-950 font-medium leading-relaxed italic">
+                        "{patient.chiefComplaint || patient.history || 'Chưa ghi nhận triệu chứng'}"
+                      </p>
                     </div>
                   </div>
 
-                  {/* 2. Ngoại khoa */}
-                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
-                      <span>2. Tiền căn Ngoại khoa:</span>
-                      <span className="text-[10px] text-indigo-600 font-semibold">Phẫu thuật &amp; Can thiệp</span>
-                    </h6>
+                  {/* PHÂN HỆ III: BỆNH SỬ CỦA BỆNH NHÂN (5 YẾU TỐ) */}
+                  {hasPresentIllnessData && (
+                    <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-2xs space-y-3 text-xs">
+                      <h5 className="font-bold text-slate-900 uppercase tracking-wider flex items-center text-[11px] text-blue-700">
+                        <Activity className="w-3.5 h-3.5 mr-1.5" />
+                        Phần III. Bệnh Sử Của Bệnh Nhân (Quá Trình &amp; Tính Chất Đau)
+                      </h5>
 
-                    {patient.surgicalInterventions && patient.surgicalInterventions.length > 0 ? (
-                      <div className="space-y-1.5">
-                        {patient.surgicalInterventions.map((s, idx) => (
-                          <div key={s.id || idx} className="p-2 bg-white rounded-lg border border-slate-100 text-[11px]">
-                            <strong className="text-slate-900">• {s.procedure}</strong>
-                            <p className="text-slate-500 mt-0.5">
-                              Thời điểm: {s.yearOrDate || 'Chưa ghi'} {s.hospital ? `| Tại: ${s.hospital}` : ''}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700">
+                        {patient.presentIllnessDetails?.onset && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <strong className="text-slate-900 block mb-0.5">1. Quá trình khởi phát:</strong>
+                            <p className="text-slate-600">
+                              {patient.presentIllnessDetails.onset}
                             </p>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="p-2 bg-white rounded-lg border border-slate-100 text-slate-500 italic">
-                        {patient.surgicalHistory || 'Chưa từng phẫu thuật hoặc can thiệp ngoại khoa từ trước đến nay.'}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 3. Dị ứng */}
-                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
-                      <span>3. Tiền sử Dị ứng:</span>
-                      <span className="text-[10px] text-amber-700 font-semibold">Thuốc / Thức ăn / Phấn hoa</span>
-                    </h6>
-
-                    <div className="space-y-1.5 text-xs text-slate-700">
-                      <div className="p-2 bg-white rounded-lg border border-slate-100">
-                        <strong>Dị ứng thuốc:</strong>{' '}
-                        {patient.allergies?.drugAllergies && patient.allergies.drugAllergies.length > 0 ? (
-                          <span className="text-rose-700 font-bold">
-                            {patient.allergies.drugAllergies.map((a) => a.allergen).join(', ')}
-                          </span>
-                        ) : (
-                          <span className="text-slate-500">{patient.allergies?.drug || 'Không có dị ứng thuốc'}</span>
                         )}
-                      </div>
 
-                      <div className="p-2 bg-white rounded-lg border border-slate-100">
-                        <strong>Dị ứng thức ăn:</strong>{' '}
-                        {patient.allergies?.foodAllergies && patient.allergies.foodAllergies.length > 0 ? (
-                          <span className="text-amber-800 font-bold">
-                            {patient.allergies.foodAllergies.map((a) => a.allergen).join(', ')}
-                          </span>
-                        ) : (
-                          <span className="text-slate-500">{patient.allergies?.food || 'Không có dị ứng thức ăn'}</span>
-                        )}
-                      </div>
-
-                      <div className="p-2 bg-white rounded-lg border border-slate-100">
-                        <strong>Dị ứng phấn hoa / khác:</strong>{' '}
-                        {patient.allergies?.pollenAllergies && patient.allergies.pollenAllergies.length > 0 ? (
-                          <span className="text-indigo-800 font-bold">
-                            {patient.allergies.pollenAllergies.map((a) => a.allergen).join(', ')}
-                          </span>
-                        ) : (
-                          <span className="text-slate-500">{patient.allergies?.other || 'Không ghi nhận'}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 5. Tiền sử gia đình */}
-                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
-                      <span>5. Tiền sử Gia đình:</span>
-                      <span className="text-[10px] text-purple-700 font-semibold">Bệnh lý cùng huyết thống</span>
-                    </h6>
-
-                    {patient.familyMembers && patient.familyMembers.length > 0 ? (
-                      <div className="space-y-1.5">
-                        {patient.familyMembers.map((fam, idx) => (
-                          <div key={fam.id || idx} className="p-2 bg-white rounded-lg border border-slate-100 text-[11px]">
-                            <strong>{fam.relationship}:</strong> <span className="text-purple-800 font-semibold">{fam.disease}</span>
-                            {fam.status && <span className="text-slate-500"> ({fam.status})</span>}
+                        {patient.presentIllnessDetails?.painCharacteristics && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <strong className="text-slate-900 block mb-0.5">2. Tính chất cơn đau:</strong>
+                            <p className="text-slate-600">
+                              {patient.presentIllnessDetails.painCharacteristics}
+                            </p>
+                            {patient.presentIllnessDetails?.additionalPainNotes && patient.presentIllnessDetails.additionalPainNotes.length > 0 && (
+                              <div className="pt-1.5 flex flex-wrap gap-1">
+                                {patient.presentIllnessDetails.additionalPainNotes.map((note, idx) => (
+                                  <span key={idx} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700 font-medium">
+                                    + {note}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        ))}
+                        )}
+
+                        {patient.presentIllnessDetails?.radiation && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <strong className="text-slate-900 block mb-0.5">3. Hướng lan:</strong>
+                            <p className="text-slate-600">
+                              {patient.presentIllnessDetails.radiation}
+                            </p>
+                          </div>
+                        )}
+
+                        {patient.presentIllnessDetails?.aggravatingRelieving && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <strong className="text-slate-900 block mb-0.5">4. Yếu tố tăng / giảm đau:</strong>
+                            <p className="text-slate-600">
+                              {patient.presentIllnessDetails.aggravatingRelieving}
+                            </p>
+                          </div>
+                        )}
+
+                        {(patient.presentIllnessDetails?.priorInterventions || (patient.presentIllnessDetails?.additionalInterventions && patient.presentIllnessDetails.additionalInterventions.length > 0)) && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 sm:col-span-2">
+                            <strong className="text-slate-900 block mb-0.5">5. Các can thiệp trước đó:</strong>
+                            <p className="text-slate-600">
+                              {patient.presentIllnessDetails?.priorInterventions || 'Chưa ghi nhận'}
+                            </p>
+                            {patient.presentIllnessDetails?.additionalInterventions && patient.presentIllnessDetails.additionalInterventions.length > 0 && (
+                              <div className="pt-1.5 flex flex-wrap gap-1">
+                                {patient.presentIllnessDetails.additionalInterventions.map((interv, idx) => (
+                                  <span key={idx} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700 font-medium">
+                                    + {interv}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <p className="p-2 bg-white rounded-lg border border-slate-100 text-slate-500 italic">
-                        {patient.familyHistory || 'Không ghi nhận người thân cùng huyết thống mắc bệnh lý tương tự.'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* 4. Thói quen & Sinh hoạt (8 thói quen y khoa) */}
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                  <h6 className="font-bold text-slate-800 text-xs">
-                    4. Khảo sát 8 Thói quen &amp; Sinh hoạt:
-                  </h6>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.exerciseLimited ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.exerciseLimited ? '✓ Hạn chế vận động' : '✗ Không hạn chế v/đ'}
-                    </span>
-
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.exerciseLittle ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.exerciseLittle ? '✓ Tập ít (<30p/tuần)' : '✗ Không tập ít'}
-                    </span>
-
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.greasyFood ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.greasyFood ? '✓ Nhiều dầu mỡ/chiên' : '✗ Ít dầu mỡ'}
-                    </span>
-
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.vegetarian ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.vegetarian ? `✓ Ăn chay (${patient.habits.vegetarianType || 'trường'})` : '✗ Không ăn chay'}
-                    </span>
-
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.highSalt ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.highSalt ? '✓ Ăn nhiều muối (mặn)' : '✗ Ăn nhạt vừa'}
-                    </span>
-
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.alcoholHeavy || (patient.habits?.alcohol && patient.habits.alcohol !== 'Không đáng kể') ? 'bg-rose-50 text-rose-900 border-rose-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.alcoholHeavy || (patient.habits?.alcohol && patient.habits.alcohol !== 'Không đáng kể') ? `✓ Rượu bia: ${patient.habits?.alcohol || 'Nhiều'}` : '✗ Ít/Không rượu bia'}
-                    </span>
-
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.lowWater ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.lowWater ? '✓ Ít uống nước (<1.5L)' : '✗ Uống đủ nước'}
-                    </span>
-
-                    <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.sedentaryJob ? 'bg-blue-50 text-blue-900 border-blue-200' : 'bg-white text-slate-400 border-slate-100'}`}>
-                      {patient.habits?.sedentaryJob ? '✓ Ngồi nhiều > 6h/ngày' : '✗ Không ngồi nhiều'}
-                    </span>
-                  </div>
-
-                  {patient.habits?.customHabits && patient.habits.customHabits.length > 0 && (
-                    <div className="pt-1.5 flex flex-wrap gap-1.5">
-                      <span className="text-[11px] font-bold text-slate-700">Thói quen khác:</span>
-                      {patient.habits.customHabits.map((h, i) => (
-                        <span key={h.id || i} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-lg text-slate-700">
-                          • {h.name} {h.details ? `(${h.details})` : ''}
-                        </span>
-                      ))}
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* PHÂN HỆ V: CHẨN ĐOÁN TRƯỚC KHI CÓ CẬN LÂM SÀNG & KẾT LUẬN */}
-              <div className="bg-amber-50/70 p-4.5 rounded-2xl border border-amber-200/90 shadow-2xs space-y-2 text-xs">
-                <h5 className="font-bold text-amber-950 uppercase tracking-wider flex items-center text-[11px]">
-                  <Stethoscope className="w-3.5 h-3.5 mr-1.5 text-amber-700" />
-                  Phần V. Chẩn Đoán Trước Khi Có Cận Lâm Sàng &amp; Chẩn Đoán Xác Định
-                </h5>
-                <div className="space-y-1.5">
-                  <div className="p-3 bg-white rounded-xl border border-amber-200">
-                    <strong className="text-amber-900 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Chẩn đoán sơ bộ ban đầu của Bác sĩ (Trước khi có kết quả X-quang, MRI, siêu âm):
-                    </strong>
-                    <p className="text-slate-800 font-semibold text-xs">
-                      {patient.preliminaryDiagnosis || patient.diagnosis || 'Hội chứng cột sống / khớp chưa có cận lâm sàng'}
-                    </p>
-                    {patient.differentialDiagnoses && patient.differentialDiagnoses.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-amber-100 space-y-1">
-                        <span className="text-[11px] font-bold text-amber-900">
-                          Chẩn đoán phân biệt / bệnh kèm theo (+):
-                        </span>
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {patient.differentialDiagnoses.map((d, i) => (
-                            <span key={i} className="text-[10px] bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-amber-900 font-medium">
-                              +{i + 1}: {d}
-                            </span>
-                          ))}
+                  {/* PHÂN HỆ IV: TIỀN CĂN TOÀN DIỆN */}
+                  {hasPastMedicalData && (
+                    <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 text-xs">
+                      <h5 className="font-bold text-slate-900 uppercase tracking-wider flex items-center text-[11px] text-rose-700">
+                        <HeartPulse className="w-3.5 h-3.5 mr-1.5" />
+                        Phần IV. Tiền Căn Toàn Diện
+                      </h5>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* 1. Nội khoa */}
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                          <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
+                            <span>1. Tiền căn Nội khoa:</span>
+                            <span className="text-[10px] text-blue-600 font-semibold">Tăng HA &amp; ĐTĐ &amp; Khác</span>
+                          </h6>
+
+                          <div className="space-y-1.5 text-slate-700 text-xs">
+                            <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
+                              <span className="font-semibold">Tăng huyết áp:</span>
+                              <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${patient.pastMedicalHistory?.hypertension ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+                                {patient.pastMedicalHistory?.hypertension ? 'CÓ' : 'KHÔNG'}
+                              </span>
+                            </div>
+                            {patient.pastMedicalHistory?.hypertension && (
+                              <p className="text-[11px] text-slate-500 pl-2">
+                                • Nơi chẩn đoán: {patient.pastMedicalHistory.hypertensionDiagnosedAt || 'Bệnh viện'}
+                                {patient.pastMedicalHistory.hypertensionMedication ? ` | Thuốc: ${patient.pastMedicalHistory.hypertensionMedication}` : ''}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
+                              <span className="font-semibold">Đái tháo đường:</span>
+                              <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${patient.pastMedicalHistory?.diabetes ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+                                {patient.pastMedicalHistory?.diabetes ? 'CÓ' : 'KHÔNG'}
+                              </span>
+                            </div>
+                            {patient.pastMedicalHistory?.diabetes && (
+                              <p className="text-[11px] text-slate-500 pl-2">
+                                • Nơi chẩn đoán: {patient.pastMedicalHistory.diabetesDiagnosedAt || 'Bệnh viện'}
+                                {patient.pastMedicalHistory.diabetesMedication ? ` | Thuốc: ${patient.pastMedicalHistory.diabetesMedication}` : ''}
+                              </p>
+                            )}
+
+                            {/* Các bệnh nội khoa khác */}
+                            {patient.pastMedicalHistory?.otherConditions && patient.pastMedicalHistory.otherConditions.length > 0 ? (
+                              <div className="pt-1 space-y-1">
+                                <p className="font-semibold text-slate-800 text-[11px]">Bệnh nội khoa khác:</p>
+                                {patient.pastMedicalHistory.otherConditions.map((c, i) => (
+                                  <div key={c.id || i} className="p-2 bg-white rounded-lg border border-slate-100 text-[11px]">
+                                    <strong>+ {c.name}</strong>
+                                    {c.diagnosedAt && <span className="text-slate-500"> ({c.diagnosedAt})</span>}
+                                    {c.currentMedications && <p className="text-slate-500 mt-0.5">• Thuốc: {c.currentMedications}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              patient.pastMedicalHistory?.otherDisease && (
+                                <p className="text-[11px] text-slate-600 pl-2">
+                                  • Bệnh nội khoa khác: {patient.pastMedicalHistory.otherDisease}
+                                </p>
+                              )
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 2. Ngoại khoa */}
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                          <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
+                            <span>2. Tiền căn Ngoại khoa:</span>
+                            <span className="text-[10px] text-indigo-600 font-semibold">Phẫu thuật &amp; Can thiệp</span>
+                          </h6>
+
+                          {patient.surgicalInterventions && patient.surgicalInterventions.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {patient.surgicalInterventions.map((s, idx) => (
+                                <div key={s.id || idx} className="p-2 bg-white rounded-lg border border-slate-100 text-[11px]">
+                                  <strong className="text-slate-900">• {s.procedure}</strong>
+                                  <p className="text-slate-500 mt-0.5">
+                                    Thời điểm: {s.yearOrDate || 'Chưa ghi'} {s.hospital ? `| Tại: ${s.hospital}` : ''}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="p-2 bg-white rounded-lg border border-slate-100 text-slate-500 italic">
+                              {patient.surgicalHistory || 'Chưa từng phẫu thuật hoặc can thiệp ngoại khoa từ trước đến nay.'}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* 3. Dị ứng */}
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                          <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
+                            <span>3. Tiền sử Dị ứng:</span>
+                            <span className="text-[10px] text-amber-700 font-semibold">Thuốc / Thức ăn / Phấn hoa</span>
+                          </h6>
+
+                          <div className="space-y-1.5 text-xs text-slate-700">
+                            <div className="p-2 bg-white rounded-lg border border-slate-100">
+                              <strong>Dị ứng thuốc:</strong>{' '}
+                              {patient.allergies?.drugAllergies && patient.allergies.drugAllergies.length > 0 ? (
+                                <span className="text-rose-700 font-bold">
+                                  {patient.allergies.drugAllergies.map((a) => a.allergen).join(', ')}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">{patient.allergies?.drug || 'Không có'}</span>
+                              )}
+                            </div>
+
+                            <div className="p-2 bg-white rounded-lg border border-slate-100">
+                              <strong>Dị ứng thức ăn:</strong>{' '}
+                              {patient.allergies?.foodAllergies && patient.allergies.foodAllergies.length > 0 ? (
+                                <span className="text-amber-800 font-bold">
+                                  {patient.allergies.foodAllergies.map((a) => a.allergen).join(', ')}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">{patient.allergies?.food || 'Không có'}</span>
+                              )}
+                            </div>
+
+                            <div className="p-2 bg-white rounded-lg border border-slate-100">
+                              <strong>Dị ứng phấn hoa / khác:</strong>{' '}
+                              {patient.allergies?.pollenAllergies && patient.allergies.pollenAllergies.length > 0 ? (
+                                <span className="text-indigo-800 font-bold">
+                                  {patient.allergies.pollenAllergies.map((a) => a.allergen).join(', ')}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">{patient.allergies?.other || 'Không có'}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 5. Tiền sử gia đình */}
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                          <h6 className="font-bold text-slate-800 flex items-center justify-between text-xs">
+                            <span>5. Tiền sử Gia đình:</span>
+                            <span className="text-[10px] text-purple-700 font-semibold">Bệnh lý cùng huyết thống</span>
+                          </h6>
+
+                          {patient.familyMembers && patient.familyMembers.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {patient.familyMembers.map((fam, idx) => (
+                                <div key={fam.id || idx} className="p-2 bg-white rounded-lg border border-slate-100 text-[11px]">
+                                  <strong>{fam.relationship}:</strong> <span className="text-purple-800 font-semibold">{fam.disease}</span>
+                                  {fam.status && <span className="text-slate-500"> ({fam.status})</span>}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="p-2 bg-white rounded-lg border border-slate-100 text-slate-500 italic">
+                              {patient.familyHistory || 'Không ghi nhận người thân cùng huyết thống mắc bệnh lý tương tự.'}
+                            </p>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="p-3 bg-white rounded-xl border border-blue-200">
-                    <strong className="text-blue-900 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Chẩn đoán chuyên khoa xác định:
-                    </strong>
-                    <p className="text-blue-950 font-bold text-xs">
-                      {patient.diagnosis}
-                    </p>
+                      {/* 4. Thói quen & Sinh hoạt */}
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                        <h6 className="font-bold text-slate-800 text-xs">
+                          4. Khảo sát Thói quen &amp; Sinh hoạt:
+                        </h6>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.exerciseLimited ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.exerciseLimited ? '✓ Hạn chế vận động' : '✗ Không hạn chế v/đ'}
+                          </span>
+
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.exerciseLittle ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.exerciseLittle ? '✓ Tập ít (<30p/tuần)' : '✗ Không tập ít'}
+                          </span>
+
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.greasyFood ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.greasyFood ? '✓ Nhiều dầu mỡ/chiên' : '✗ Ít dầu mỡ'}
+                          </span>
+
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.vegetarian ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.vegetarian ? `✓ Ăn chay (${patient.habits.vegetarianType || 'trường'})` : '✗ Không ăn chay'}
+                          </span>
+
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.highSalt ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.highSalt ? '✓ Ăn nhiều muối (mặn)' : '✗ Ăn nhạt vừa'}
+                          </span>
+
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.alcoholHeavy || (patient.habits?.alcohol && patient.habits.alcohol !== 'Không đáng kể') ? 'bg-rose-50 text-rose-900 border-rose-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.alcoholHeavy || (patient.habits?.alcohol && patient.habits.alcohol !== 'Không đáng kể') ? `✓ Rượu bia: ${patient.habits?.alcohol || 'Nhiều'}` : '✗ Ít/Không rượu bia'}
+                          </span>
+
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.lowWater ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.lowWater ? '✓ Ít uống nước (<1.5L)' : '✗ Uống đủ nước'}
+                          </span>
+
+                          <span className={`p-2 rounded-lg border font-semibold ${patient.habits?.sedentaryJob ? 'bg-blue-50 text-blue-900 border-blue-200' : 'bg-white text-slate-400 border-slate-100'}`}>
+                            {patient.habits?.sedentaryJob ? '✓ Ngồi nhiều > 6h/ngày' : '✗ Không ngồi nhiều'}
+                          </span>
+                        </div>
+
+                        {patient.habits?.customHabits && patient.habits.customHabits.length > 0 && (
+                          <div className="pt-1.5 flex flex-wrap gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-700">Thói quen khác:</span>
+                            {patient.habits.customHabits.map((h, i) => (
+                              <span key={h.id || i} className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-lg text-slate-700">
+                                • {h.name} {h.details ? `(${h.details})` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PHÂN HỆ V: CHẨN ĐOÁN TRƯỚC KHI CÓ CẬN LÂM SÀNG & KẾT LUẬN */}
+                  <div className="bg-amber-50/70 p-4.5 rounded-2xl border border-amber-200/90 shadow-2xs space-y-2 text-xs">
+                    <h5 className="font-bold text-amber-950 uppercase tracking-wider flex items-center text-[11px]">
+                      <Stethoscope className="w-3.5 h-3.5 mr-1.5 text-amber-700" />
+                      Phần V. Chẩn Đoán Trước Khi Có Cận Lâm Sàng &amp; Chẩn Đoán Xác Định
+                    </h5>
+                    <div className="space-y-1.5">
+                      <div className="p-3 bg-white rounded-xl border border-amber-200">
+                        <strong className="text-amber-900 block text-[11px] uppercase tracking-wider mb-0.5">
+                          Chẩn đoán sơ bộ ban đầu của Bác sĩ (Trước khi có kết quả X-quang, MRI, siêu âm):
+                        </strong>
+                        <p className="text-slate-800 font-semibold text-xs">
+                          {patient.preliminaryDiagnosis || patient.diagnosis}
+                        </p>
+                        {patient.differentialDiagnoses && patient.differentialDiagnoses.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-amber-100 space-y-1">
+                            <span className="text-[11px] font-bold text-amber-900">
+                              Chẩn đoán phân biệt / bệnh kèm theo (+):
+                            </span>
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {patient.differentialDiagnoses.map((d, i) => (
+                                <span key={i} className="text-[10px] bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-amber-900 font-medium">
+                                  +{i + 1}: {d}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-3 bg-white rounded-xl border border-blue-200">
+                        <strong className="text-blue-900 block text-[11px] uppercase tracking-wider mb-0.5">
+                          Chẩn đoán chuyên khoa xác định:
+                        </strong>
+                        <p className="text-blue-950 font-bold text-xs">
+                          {patient.diagnosis}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
             </div>
 
             {/* Active treatments linked */}
@@ -1351,6 +1529,18 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
               (inv) => inv.patientId === patient.id || inv.patientName === patient.name
             ).length
           }
+        />
+      )}
+      {/* Modal Chỉnh Sửa Bệnh Án Lâm Sàng EMR */}
+      {isEditEMROpen && patient && (
+        <ClinicalEMRFormModal
+          isOpen={isEditEMROpen}
+          onClose={() => setIsEditEMROpen(false)}
+          initialPatient={patient}
+          onSave={(updated) => {
+            onUpdatePatient(updated);
+            setIsEditEMROpen(false);
+          }}
         />
       )}
     </>

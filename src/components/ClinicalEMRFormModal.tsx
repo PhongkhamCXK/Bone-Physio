@@ -7,6 +7,7 @@ import {
   HabitCustomItem,
   FamilyHistoryMember,
   PresentIllnessDetails,
+  HealthMetric,
 } from '../types';
 import {
   X,
@@ -42,8 +43,24 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
   initialPatient,
 }) => {
   const [activeSection, setActiveSection] = useState<
-    'admin' | 'chief' | 'history' | 'past' | 'diagnosis'
+    'admin' | 'chief' | 'history' | 'past' | 'diagnosis' | 'metrics'
   >('admin');
+
+  // FORM VALIDATION ERROR
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // VI. CHỈ SỐ LÂM SÀNG BAN ĐẦU CỦA BÁC SĨ (Baseline Metrics)
+  const [initialPainScore, setInitialPainScore] = useState<number>(5);
+  const [initialRom, setInitialRom] = useState('Hạn chế 30% khi gập/xoay');
+  const [initialMuscleStrength, setInitialMuscleStrength] = useState('4/5');
+  const [initialBp, setInitialBp] = useState('120/80 mmHg');
+  const [initialHeartRate, setInitialHeartRate] = useState('76 bpm');
+  const [initialSpo2, setInitialSpo2] = useState('98%');
+  const [initialHeight, setInitialHeight] = useState('165');
+  const [initialWeight, setInitialWeight] = useState('60');
+  const [initialFunctionalScore, setInitialFunctionalScore] = useState('ODI 20% (Mức độ vừa)');
+  const [initialJointCircumference, setInitialJointCircumference] = useState('36 cm');
+  const [initialMetricNotes, setInitialMetricNotes] = useState('Chỉ số khám lâm sàng ban đầu của Bác sĩ');
 
   // I. HÀNH CHÍNH
   const [name, setName] = useState('');
@@ -228,8 +245,37 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
 
         setNextRevisitDate(initialPatient.nextRevisitDate || '');
         setRevisitNotes(initialPatient.revisitNotes || '');
+
+        // VI. Baseline health metrics
+        if (initialPatient.healthMetrics && initialPatient.healthMetrics.length > 0) {
+          const first = initialPatient.healthMetrics[0];
+          setInitialPainScore(first.painScore ?? 5);
+          setInitialRom(first.rangeOfMotion || 'Hạn chế 30% khi gập/xoay');
+          setInitialMuscleStrength(first.muscleStrength || '4/5');
+          setInitialBp(first.bloodPressure || '120/80 mmHg');
+          setInitialHeartRate(first.heartRate || '76 bpm');
+          setInitialSpo2(first.spo2 || '98%');
+          setInitialHeight(first.height ? String(first.height) : '165');
+          setInitialWeight(first.weight ? String(first.weight) : '60');
+          setInitialFunctionalScore(first.functionalScore || 'ODI 20% (Mức độ vừa)');
+          setInitialJointCircumference(first.jointCircumference || '36 cm');
+          setInitialMetricNotes(first.notes || 'Chỉ số khám lâm sàng ban đầu của Bác sĩ');
+        } else {
+          setInitialPainScore(5);
+          setInitialRom('Hạn chế 30% khi gập/xoay');
+          setInitialMuscleStrength('4/5');
+          setInitialBp('120/80 mmHg');
+          setInitialHeartRate('76 bpm');
+          setInitialSpo2('98%');
+          setInitialHeight('165');
+          setInitialWeight('60');
+          setInitialFunctionalScore('ODI 20% (Mức độ vừa)');
+          setInitialJointCircumference('36 cm');
+          setInitialMetricNotes('Chỉ số khám lâm sàng ban đầu của Bác sĩ');
+        }
       } else {
         // Reset defaults for new patient
+        setFormError(null);
         setName('');
         setPhone('');
         setAge(42);
@@ -238,6 +284,18 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
         setFirstVisitDateTime(new Date().toISOString().slice(0, 16));
         setBodyPart('Thắt lưng');
         setPassword('123456');
+
+        setInitialPainScore(5);
+        setInitialRom('Hạn chế 30% khi gập/xoay');
+        setInitialMuscleStrength('4/5');
+        setInitialBp('120/80 mmHg');
+        setInitialHeartRate('76 bpm');
+        setInitialSpo2('98%');
+        setInitialHeight('165');
+        setInitialWeight('60');
+        setInitialFunctionalScore('ODI 20% (Mức độ vừa)');
+        setInitialJointCircumference('36 cm');
+        setInitialMetricNotes('Chỉ số khám lâm sàng ban đầu của Bác sĩ');
 
         setChiefComplaint('Đau mỏi vùng thắt lưng âm ỉ, lan xuống mông khi ngồi làm việc lâu.');
 
@@ -464,16 +522,18 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
     e.preventDefault();
 
     if (!name.trim()) {
-      alert('Vui lòng nhập Họ và Tên bệnh nhân!');
+      setFormError('Vui lòng nhập Họ và Tên bệnh nhân!');
       setActiveSection('admin');
       return;
     }
 
     if (!phone.trim()) {
-      alert('Vui lòng nhập Số điện thoại bệnh nhân!');
+      setFormError('Vui lòng nhập Số điện thoại bệnh nhân!');
       setActiveSection('admin');
       return;
     }
+
+    setFormError(null);
 
     // Build synthesized clinical text for backward compatibility
     const addedIntervText = additionalInterventions.filter(Boolean).length > 0
@@ -484,11 +544,36 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
       : '';
     const synthesizedHistory = `${chiefComplaint || ''}. Khởi phát: ${onset || ''}. Tính chất: ${painCharacteristics || ''}.${addedPainText} Hướng lan: ${radiation || ''}. Yếu tố tăng/giảm: ${aggravatingRelieving || ''}. Can thiệp trước: ${priorInterventions || ''}.${addedIntervText}`;
 
+    // VI. Synthesize baseline health metric
+    const hNum = Number(initialHeight) || 0;
+    const wNum = Number(initialWeight) || 0;
+    const calcBmi = hNum > 0 && wNum > 0 ? (wNum / ((hNum / 100) ** 2)).toFixed(1) : undefined;
+
+    const baselineMetric: HealthMetric = {
+      id: (initialPatient?.healthMetrics && initialPatient.healthMetrics[0]?.id) || uid('HM'),
+      date: (initialPatient?.healthMetrics && initialPatient.healthMetrics[0]?.date) || (firstVisitDateTime ? firstVisitDateTime.split('T')[0] : new Date().toISOString().split('T')[0]),
+      painScore: Number(initialPainScore) || 0,
+      rangeOfMotion: initialRom.trim() || 'Bình thường',
+      muscleStrength: initialMuscleStrength.trim() || '4/5',
+      bloodPressure: initialBp.trim() || '120/80 mmHg',
+      heartRate: initialHeartRate.trim() || '76 bpm',
+      spo2: initialSpo2.trim() || '98%',
+      height: hNum > 0 ? hNum : undefined,
+      weight: wNum > 0 ? wNum : undefined,
+      bmi: calcBmi,
+      functionalScore: initialFunctionalScore.trim() || undefined,
+      jointCircumference: initialJointCircumference.trim() || undefined,
+      notes: initialMetricNotes.trim() || 'Chỉ số khám lâm sàng ban đầu của Bác sĩ',
+    };
+
+    const remainingMetrics = (initialPatient?.healthMetrics || []).slice(1);
+    const updatedHealthMetrics = [baselineMetric, ...remainingMetrics];
+
     const updatedPatient: Patient = {
       ...(initialPatient || {
         id: uid('BN'),
         dietPlan: STANDARD_DIET_PLAN,
-        healthMetrics: [],
+        healthMetrics: updatedHealthMetrics,
         assignedExercises: (() => {
           const bpLower = (bodyPart || '').toLowerCase();
           if (bpLower.includes('cổ') || bpLower.includes('vai')) {
@@ -501,6 +586,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
         })(),
         additionalRegions: [],
       }),
+      healthMetrics: updatedHealthMetrics,
       // I. Hành chính
       name: name.trim(),
       phone: phone.trim(),
@@ -600,7 +686,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/70 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5 bg-slate-900/70 backdrop-blur-sm overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 my-auto">
         {/* Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white flex items-center justify-between flex-shrink-0">
@@ -616,17 +702,48 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-blue-100">
-                Đầy đủ 5 phân hệ: Hành chính, Lý do khám, Bệnh sử chi tiết, Tiền căn toàn diện &amp; Chẩn đoán sơ bộ ban đầu
+                Đầy đủ 6 phân hệ: Hành chính, Lý do khám, Bệnh sử, Tiền căn, Chẩn đoán sơ bộ &amp; Chỉ số lâm sàng ban đầu
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-xl transition text-blue-100 hover:text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                handleSubmit(e);
+              }}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-emerald-500/30 cursor-pointer"
+              title="Lưu tất cả thay đổi bệnh án EMR"
+            >
+              <Save className="w-4 h-4" />
+              <span>Lưu Bệnh Án</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-xl transition text-blue-100 hover:text-white cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {/* Validation Error Banner */}
+        {formError && (
+          <div className="mx-6 mt-3 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <span>{formError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormError(null)}
+              className="text-rose-500 hover:text-rose-800 text-xs font-bold px-2 py-0.5 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Preset Quick Fill Bar */}
         <div className="px-6 py-2.5 bg-blue-50/70 border-b border-blue-100 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -638,21 +755,21 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
             <button
               type="button"
               onClick={() => applyPreset('cervical')}
-              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-200 font-medium transition"
+              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-200 font-medium transition cursor-pointer"
             >
               Cột Sống Cổ
             </button>
             <button
               type="button"
               onClick={() => applyPreset('lumbar')}
-              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-200 font-medium transition"
+              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-200 font-medium transition cursor-pointer"
             >
               Thắt Lưng
             </button>
             <button
               type="button"
               onClick={() => applyPreset('knee')}
-              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-200 font-medium transition"
+              className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-200 font-medium transition cursor-pointer"
             >
               Khớp Gối
             </button>
@@ -664,7 +781,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('admin')}
-            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition ${
+            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${
               activeSection === 'admin'
                 ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -677,7 +794,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('chief')}
-            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition ${
+            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${
               activeSection === 'chief'
                 ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -690,7 +807,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('history')}
-            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition ${
+            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${
               activeSection === 'history'
                 ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -703,7 +820,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('past')}
-            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition ${
+            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${
               activeSection === 'past'
                 ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -716,14 +833,27 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('diagnosis')}
-            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition ${
+            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${
               activeSection === 'diagnosis'
                 ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             <Stethoscope className="w-3.5 h-3.5" />
-            V. Chẩn Đoán Sơ Bộ (Trước CLS)
+            V. Chẩn Đoán Sơ Bộ
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('metrics')}
+            className={`px-3.5 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer ${
+              activeSection === 'metrics'
+                ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            VI. Chỉ Số Ban Đầu
           </button>
         </div>
 
@@ -860,11 +990,22 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
                 />
               </div>
 
-              <div className="pt-3 flex justify-end">
+              <div className="pt-3 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Lưu Ngay Bệnh Án</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setActiveSection('chief')}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer ml-auto"
                 >
                   <span>Tiếp tục: II. Lý Do Đến Khám</span>
                   <ChevronRight className="w-4 h-4" />
@@ -909,22 +1050,35 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
                 />
               </div>
 
-              <div className="pt-3 flex justify-between">
+              <div className="pt-3 flex justify-between items-center">
                 <button
                   type="button"
                   onClick={() => setActiveSection('admin')}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Quay lại: I. Hành chính
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('history')}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
-                >
-                  <span>Tiếp tục: III. Bệnh Sử Bệnh Nhân</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Lưu Bệnh Án</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection('history')}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <span>Tiếp tục: III. Bệnh Sử</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1103,22 +1257,35 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
                 )}
               </div>
 
-              <div className="pt-3 flex justify-between">
+              <div className="pt-3 flex justify-between items-center">
                 <button
                   type="button"
                   onClick={() => setActiveSection('chief')}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Quay lại: II. Lý do khám
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('past')}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
-                >
-                  <span>Tiếp tục: IV. Tiền Căn Toàn Diện</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Lưu Bệnh Án</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection('past')}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <span>Tiếp tục: IV. Tiền Căn Toàn Diện</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -2010,22 +2177,35 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
                 )}
               </div>
 
-              <div className="pt-3 flex justify-between">
+              <div className="pt-3 flex justify-between items-center">
                 <button
                   type="button"
                   onClick={() => setActiveSection('history')}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Quay lại: III. Bệnh sử
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('diagnosis')}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
-                >
-                  <span>Tiếp tục: V. Chẩn Đoán Trước CLS</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Lưu Bệnh Án</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection('diagnosis')}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <span>Tiếp tục: V. Chẩn Đoán Trước CLS</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -2186,20 +2366,248 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
                 </div>
               </div>
 
-              <div className="pt-3 flex justify-between">
+              <div className="pt-3 flex flex-wrap items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => setActiveSection('past')}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
-                  Quay lại: IV. Tiền căn
+                  ← Quay lại: IV. Tiền căn
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection('metrics')}
+                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Tiếp tục: VI. Chỉ Số Ban Đầu</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-2 active:scale-95 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{initialPatient ? 'Lưu Bệnh Án EMR' : 'Tạo Bệnh Án Mới'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION VI: CÁC CHỈ SỐ LÂM SÀNG BAN ĐẦU CỦA BÁC SĨ (Baseline Metrics) */}
+          {activeSection === 'metrics' && (
+            <div className="space-y-5 animate-in fade-in">
+              <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-white p-4.5 rounded-2xl border border-indigo-200 space-y-2">
+                <div className="flex items-center space-x-2">
+                  <span className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                    VI
+                  </span>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Chỉ Số Lâm Sàng Ban Đầu Của Bác Sĩ &amp; Khảo Sát Chuyên Sâu
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Các chỉ số đo lường ban đầu trước khi bắt đầu liệu trình: Thang đau VAS, biên độ ROM, sức cơ MMT, sinh hiệu, BMI và điểm chức năng. <strong>Bệnh nhân cũng sẽ nhìn thấy các chỉ số này</strong> trên cổng thông tin cá nhân để đối chiếu tiến trình phục hồi.
+                </p>
+              </div>
+
+              {/* Grid 2 Columns of Baseline Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Mức độ đau ban đầu VAS */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800">
+                      1. Mức Độ Đau Ban Đầu (Thang VAS / NRS 0-10):
+                    </label>
+                    <span
+                      className={`px-3 py-1 rounded-full font-black text-xs ${
+                        initialPainScore <= 3
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : initialPainScore <= 6
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-rose-100 text-rose-900 border border-rose-300'
+                      }`}
+                    >
+                      {initialPainScore} / 10 ({initialPainScore <= 3 ? 'Nhẹ' : initialPainScore <= 6 ? 'Vừa' : 'Nặng / Dữ dội'})
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={initialPainScore}
+                    onChange={(e) => setInitialPainScore(Number(e.target.value))}
+                    className="w-full accent-blue-600 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400 font-semibold px-1">
+                    <span>0: Không đau</span>
+                    <span>5: Đau vừa</span>
+                    <span>10: Đau không chịu nổi</span>
+                  </div>
+                </div>
+
+                {/* 2. Tầm vận động (ROM) */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
+                    2. Tầm Vận Động Ban Đầu (ROM):
+                  </label>
+                  <input
+                    type="text"
+                    value={initialRom}
+                    onChange={(e) => setInitialRom(e.target.value)}
+                    placeholder="VD: Cổ cúi 35°, xoay trái 45° (Hạn chế 30%) hoặc Gối gập 90°"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Ghi rõ góc đo Goniometer hoặc tỷ lệ % hạn chế vận động so với bình thường.
+                  </p>
+                </div>
+
+                {/* 3. Sức cơ MMT */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
+                    3. Thang Đo Sức Cơ MMT (0/5 đến 5/5):
+                  </label>
+                  <select
+                    value={initialMuscleStrength}
+                    onChange={(e) => setInitialMuscleStrength(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    <option value="5/5">5/5 - Bình thường (Kháng cự tối đa)</option>
+                    <option value="4/5">4/5 - Khá (Kháng cự một phần với lực cản)</option>
+                    <option value="3/5">3/5 - Trung bình (Thắng trọng lực nhưng không thắng lực cản)</option>
+                    <option value="2/5">2/5 - Yếu (Cử động được khi loại bỏ trọng lực)</option>
+                    <option value="1/5">1/5 - Kém (Chỉ sờ thấy co cơ nhẹ, không tạo cử động)</option>
+                    <option value="0/5">0/5 - Liệt hoàn toàn (Không có co cơ)</option>
+                  </select>
+                </div>
+
+                {/* 4. Huyết áp & Nhịp tim */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
+                    4. Huyết Áp &amp; Nhịp Tim:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={initialBp}
+                      onChange={(e) => setInitialBp(e.target.value)}
+                      placeholder="120/80 mmHg"
+                      className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={initialHeartRate}
+                      onChange={(e) => setInitialHeartRate(e.target.value)}
+                      placeholder="76 bpm"
+                      className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* 5. SpO2 & Cân Nặng / Chiều Cao / BMI */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
+                    5. SpO2 (%) &amp; Thể Trạng (Chiều Cao, Cân Nặng, BMI):
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">SpO2 (%)</span>
+                      <input
+                        type="text"
+                        value={initialSpo2}
+                        onChange={(e) => setInitialSpo2(e.target.value)}
+                        placeholder="98%"
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">Cao (cm)</span>
+                      <input
+                        type="number"
+                        value={initialHeight}
+                        onChange={(e) => setInitialHeight(e.target.value)}
+                        placeholder="165"
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">Nặng (kg)</span>
+                      <input
+                        type="number"
+                        value={initialWeight}
+                        onChange={(e) => setInitialWeight(e.target.value)}
+                        placeholder="60"
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                  {Number(initialHeight) > 0 && Number(initialWeight) > 0 && (
+                    <div className="text-[11px] text-blue-700 font-semibold pt-1">
+                      BMI tính toán: {(Number(initialWeight) / ((Number(initialHeight) / 100) ** 2)).toFixed(1)} kg/m²
+                    </div>
+                  )}
+                </div>
+
+                {/* 6. Thang Điểm Chức Năng Khuyết Tật & Chu Vi Khớp */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
+                    6. Thang Điểm Chức Năng (ODI / NDI / WOMAC) &amp; Vòng Khớp:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">Điểm chức năng:</span>
+                      <input
+                        type="text"
+                        value={initialFunctionalScore}
+                        onChange={(e) => setInitialFunctionalScore(e.target.value)}
+                        placeholder="VD: ODI 24%, NDI 18%"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">Chu vi vòng khớp/chi:</span>
+                      <input
+                        type="text"
+                        value={initialJointCircumference}
+                        onChange={(e) => setInitialJointCircumference(e.target.value)}
+                        placeholder="VD: Khớp gối 36 cm"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 7. Ghi Chú & Mục Tiêu Phục Hồi Ban Đầu Của Bác Sĩ */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  7. Ghi Chú Đánh Giá Lâm Sàng &amp; Mục Tiêu Phục Hồi Ban Đầu Của Bác Sĩ:
+                </label>
+                <textarea
+                  rows={2}
+                  value={initialMetricNotes}
+                  onChange={(e) => setInitialMetricNotes(e.target.value)}
+                  placeholder="VD: Giảm đau VAS từ 6 xuống dưới 3 sau 5 buổi, phục hồi ROM gối 120 độ, giảm co thắt cơ thắt lưng..."
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('diagnosis')}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  ← Quay lại: V. Chẩn đoán
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-2 active:scale-95"
+                  className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-2 active:scale-95 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{initialPatient ? 'Lưu Toàn Bộ Bệnh Án EMR' : 'Tạo Bệnh Án EMR Mới'}</span>
+                  <span>{initialPatient ? 'Lưu Toàn Bộ Bệnh Án EMR (Kèm Chỉ Số Ban Đầu)' : 'Tạo Bệnh Án EMR Mới'}</span>
                 </button>
               </div>
             </div>
@@ -2207,18 +2615,29 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
         </form>
 
         {/* Footer */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
+        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 flex-shrink-0">
           <div className="flex items-center space-x-1.5">
             <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-            <span>EMR Medical Protocol: Chuẩn Bộ Y Tế &amp; Phục Hồi Chức Năng Cột Sống - Khớp</span>
+            <span>EMR Medical Protocol: Chuẩn Y Khoa 6 Phân Hệ Toàn Diện</span>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2.5 self-end sm:self-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition font-semibold"
+              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-200 transition font-semibold cursor-pointer"
             >
-              Đóng
+              Hủy / Đóng
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                handleSubmit(e);
+              }}
+              className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-blue-600/25 active:scale-95 cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>{initialPatient ? 'Lưu Thay Đổi Bệnh Án EMR' : 'Tạo Bệnh Án EMR Mới'}</span>
             </button>
           </div>
         </div>

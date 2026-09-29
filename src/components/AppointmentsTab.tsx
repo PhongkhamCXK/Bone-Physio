@@ -22,6 +22,7 @@ import {
 import { uid } from '../data/seedData';
 import { getAppointmentMinutesUntil } from '../utils/appointmentNotificationManager';
 import { ConfirmModal } from './ConfirmModal';
+import { smartSearchMatch } from '../utils/textUtils';
 
 interface AppointmentsTabProps {
   appointments: Appointment[];
@@ -176,10 +177,10 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
 
   const filtered = appointments.filter((a) => {
     const matchQuery =
-      a.patientName.toLowerCase().includes(search.toLowerCase()) ||
-      a.phone.includes(search) ||
-      a.service.toLowerCase().includes(search.toLowerCase()) ||
-      a.doctor.toLowerCase().includes(search.toLowerCase());
+      smartSearchMatch(a.patientName, search) ||
+      smartSearchMatch(a.phone, search) ||
+      smartSearchMatch(a.service, search) ||
+      smartSearchMatch(a.doctor, search);
 
     const minutesUntil = getAppointmentMinutesUntil(a);
     const isUpcoming45 =

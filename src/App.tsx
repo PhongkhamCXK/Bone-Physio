@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Patient,
   Treatment,
@@ -12,6 +12,7 @@ import {
   Expense,
   TaxConfig,
   WarrantyRecord,
+  SessionSchedule,
 } from './types';
 import {
   INITIAL_PATIENTS,
@@ -201,6 +202,7 @@ export default function App() {
   const [isCheckInOutModalOpen, setIsCheckInOutModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isMismatchModalOpen, setIsMismatchModalOpen] = useState(false);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(() => {
     return getSupabaseConfig().isConfigured;
   });
@@ -211,6 +213,53 @@ export default function App() {
     details?: string;
   } | null>(null);
   const toastMessage = toast?.message || null;
+
+  // QUÉT CẢNH BÁO BUỔI TẬP CHƯA ĐỒNG BỘ XÁC NHẬN 2 BÊN (KTV hoặc Bệnh nhân chưa ấn)
+  const unconfirmedMismatchSessions = useMemo(() => {
+    const list: {
+      treatment: Treatment;
+      session: SessionSchedule;
+      patientName: string;
+      bodyPart: string;
+      reason: string;
+    }[] = [];
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    treatments.forEach((t) => {
+      (t.sessions || []).forEach((s) => {
+        const clinicDone = Boolean(s.clinicConfirmed || s.completed);
+        const patientDone = Boolean(s.patientConfirmed);
+        if (clinicDone && !patientDone) {
+          list.push({
+            treatment: t,
+            session: s,
+            patientName: t.patientName,
+            bodyPart: t.bodyPart,
+            reason: `KTV đã duyệt, nhưng Bệnh nhân (${t.patientName}) chưa ấn xác nhận buổi ${s.number}`,
+          });
+        } else if (!clinicDone && patientDone) {
+          list.push({
+            treatment: t,
+            session: s,
+            patientName: t.patientName,
+            bodyPart: t.bodyPart,
+            reason: `Bệnh nhân (${t.patientName}) đã ấn xác nhận buổi ${s.number}, nhưng KTV chưa duyệt`,
+          });
+        } else if (!clinicDone && !patientDone && (s.date === todayStr || (s.number <= t.done && t.done > 0))) {
+          list.push({
+            treatment: t,
+            session: s,
+            patientName: t.patientName,
+            bodyPart: t.bodyPart,
+            reason: `Cả 2 bên chưa ấn xác nhận buổi ${s.number} (Ngày: ${s.date || 'Hôm nay'}) của ${t.patientName}`,
+          });
+        }
+      });
+    });
+
+    return list;
+  }, [treatments]);
 
   // UPCOMING APPOINTMENTS NOTIFICATION STATE (Trong vòng 45 phút tới)
   const [upcomingNotices, setUpcomingNotices] = useState<UpcomingAppointmentNotice[]>([]);
@@ -1172,6 +1221,63 @@ export default function App() {
     }
   };
 
+  // Dual confirmation handlers (Duyệt đối soát buổi tập 2 chiều)
+  const handleApproveDualSession = (treatmentId: string, sessionNumber: number) => {
+    const target = treatments.find((t) => t.id === treatmentId);
+    if (!target) return;
+    const nowStr = new Date().toLocaleString('vi-VN');
+    const updatedSessions = (target.sessions || []).map((s) => {
+      if (s.number === sessionNumber) {
+        return {
+          ...s,
+          clinicConfirmed: true,
+          clinicConfirmedAt: s.clinicConfirmedAt || nowStr,
+          patientConfirmed: true,
+          patientConfirmedAt: s.patientConfirmedAt || nowStr,
+          completed: true,
+        };
+      }
+      return s;
+    });
+    const doneCount = updatedSessions.filter((s) => s.completed || (s.clinicConfirmed && s.patientConfirmed)).length;
+    const updated: Treatment = {
+      ...target,
+      sessions: updatedSessions,
+      done: Math.max(target.done, doneCount),
+    };
+    handleUpdateTreatment(updated);
+    showToast(`Đã duyệt đồng bộ buổi ${sessionNumber} của bệnh nhân ${target.patientName}!`);
+  };
+
+  const handleApproveAllDualSessions = () => {
+    const nowStr = new Date().toLocaleString('vi-VN');
+    unconfirmedMismatchSessions.forEach((item) => {
+      const target = treatments.find((t) => t.id === item.treatment.id);
+      if (!target) return;
+      const updatedSessions = (target.sessions || []).map((s) => {
+        if (s.number === item.session.number) {
+          return {
+            ...s,
+            clinicConfirmed: true,
+            clinicConfirmedAt: s.clinicConfirmedAt || nowStr,
+            patientConfirmed: true,
+            patientConfirmedAt: s.patientConfirmedAt || nowStr,
+            completed: true,
+          };
+        }
+        return s;
+      });
+      const doneCount = updatedSessions.filter((s) => s.completed || (s.clinicConfirmed && s.patientConfirmed)).length;
+      handleUpdateTreatment({
+        ...target,
+        sessions: updatedSessions,
+        done: Math.max(target.done, doneCount),
+      });
+    });
+    setIsMismatchModalOpen(false);
+    showToast(`Đã duyệt đồng bộ toàn bộ ${unconfirmedMismatchSessions.length} buổi tập!`);
+  };
+
   // Logout handler
   const handleLogout = () => {
     localStorage.removeItem('bp_current_user');
@@ -1284,6 +1390,35 @@ export default function App() {
           isSupabaseConnected={isSupabaseConnected}
         />
 
+        {/* CẢNH BÁO ĐỐI SOÁT XÁC NHẬN BUỔI TẬP 2 BÊN (CHO ADMIN / BÁC SĨ) */}
+        {currentUser?.role === 'admin' && unconfirmedMismatchSessions.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 text-white px-4 py-3 mx-4 sm:mx-6 lg:mx-8 mt-4 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-200 animate-pulse" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-bold flex items-center space-x-2">
+                  <span>CẢNH BÁO ĐỐI SOÁT: Có {unconfirmedMismatchSessions.length} buổi tập chưa xác nhận đồng bộ 2 bên!</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-white text-rose-700 font-black">
+                    Khẩn cấp
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/95 mt-0.5 line-clamp-1">
+                  {unconfirmedMismatchSessions[0].reason} {unconfirmedMismatchSessions.length > 1 ? `và ${unconfirmedMismatchSessions.length - 1} ca khác...` : ''}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMismatchModalOpen(true)}
+              className="px-4 py-2 bg-white text-rose-700 hover:bg-rose-50 active:scale-95 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm self-start sm:self-auto flex-shrink-0 cursor-pointer"
+            >
+              <span>Kiểm Tra &amp; Duyệt Ngay</span>
+            </button>
+          </div>
+        )}
+
         {/* Dynamic View Tab */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
@@ -1300,6 +1435,7 @@ export default function App() {
                 onUpdatePatient={handleUpdatePatient}
                 onAddPatient={handleAddPatient}
                 onShowToast={showToast}
+                onOpenMismatchModal={() => setIsMismatchModalOpen(true)}
               />
             )}
 
@@ -1518,6 +1654,8 @@ export default function App() {
                     setAppointments((prev) => [...prev, newAppt]);
                     showToast(`Đã ghi nhận yêu cầu hẹn bảo dưỡng ngày ${date}! Bác sĩ sẽ liên hệ xác nhận.`);
                   }}
+                  onUpdatePatient={handleUpdatePatient}
+                  onUpdateTreatment={handleUpdateTreatment}
                 />
               )}
           </div>
@@ -1622,6 +1760,94 @@ export default function App() {
         }}
         onNotify={showToast}
       />
+
+      {/* Modal Đối Soát Buổi Tập 2 Chiều (Admin Quick Review) */}
+      {isMismatchModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Đối Soát Xác Nhận Buổi Tập 2 Chiều ({unconfirmedMismatchSessions.length} ca lệch)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Danh sách các buổi tập chỉ mới một bên (KTV hoặc Bệnh nhân) ấn xác nhận.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMismatchModalOpen(false)}
+                className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+              {unconfirmedMismatchSessions.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="space-y-1">
+                    <div className="font-bold text-slate-900 flex items-center space-x-2">
+                      <span>{item.patientName}</span>
+                      <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                        {item.bodyPart}
+                      </span>
+                      <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                        Buổi {item.session.number}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-900 font-medium">
+                      ⚠️ {item.reason}
+                    </p>
+                    <div className="text-[10px] text-slate-500">
+                      Ngày: {item.session.date || 'Hôm nay'} • Nội dung: {item.session.content}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApproveDualSession(item.treatment.id, item.session.number)}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1 shadow-sm flex-shrink-0 cursor-pointer self-start sm:self-auto"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Duyệt Đồng Bộ</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-slate-100 pt-4 gap-3">
+              <span className="text-xs text-slate-500">
+                Sau khi duyệt, buổi tập sẽ được ghi nhận hoàn tất và đồng bộ lên Supabase Cloud.
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleApproveAllDualSessions}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                >
+                  Duyệt Tất Cả ({unconfirmedMismatchSessions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMismatchModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Upcoming Appointments Toast Notification (Trong vòng 45 phút) */}
       <UpcomingAppointmentToast

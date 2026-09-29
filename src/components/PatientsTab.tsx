@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ClinicalEMRFormModal } from './ClinicalEMRFormModal';
 import { ConfirmDeletePatientModal } from './ConfirmDeletePatientModal';
+import { smartSearchMatch } from '../utils/textUtils';
 
 interface PatientsTabProps {
   patients: Patient[];
@@ -69,16 +70,18 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
     setIsEMRModalOpen(false);
   };
 
-  const filtered = patients.filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.phone.includes(search) ||
-      p.id.toLowerCase().includes(search.toLowerCase()) ||
-      p.diagnosis.toLowerCase().includes(search.toLowerCase()) ||
-      p.bodyPart.toLowerCase().includes(search.toLowerCase()) ||
-      (p.chiefComplaint && p.chiefComplaint.toLowerCase().includes(search.toLowerCase())) ||
-      (p.preliminaryDiagnosis && p.preliminaryDiagnosis.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = patients.filter((p) => {
+    if (!search.trim()) return true;
+    return (
+      smartSearchMatch(p.name, search) ||
+      smartSearchMatch(p.phone, search) ||
+      smartSearchMatch(p.id, search) ||
+      smartSearchMatch(p.diagnosis, search) ||
+      smartSearchMatch(p.bodyPart, search) ||
+      smartSearchMatch(p.chiefComplaint, search) ||
+      smartSearchMatch(p.preliminaryDiagnosis, search)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -267,37 +270,43 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
               </div>
 
               <div className="pt-3 border-t border-slate-100 space-y-2">
-                {/* Core action to view EMR and add regions */}
-                <button
-                  type="button"
-                  onClick={() => onOpenEMR(p)}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm shadow-blue-600/25 active:scale-95"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Xem Hồ Sơ EMR &amp; Thêm Vùng Mới</span>
-                </button>
+                {/* Actions: View EMR & Edit EMR */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenEMR(p)}
+                    className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm shadow-blue-600/25 active:scale-95 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Xem Hồ Sơ EMR</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenEdit(p);
+                    }}
+                    className="py-2.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 active:scale-95 cursor-pointer"
+                    title="Chỉnh sửa Bệnh án Lâm sàng EMR"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Sửa Bệnh Án</span>
+                  </button>
+                </div>
 
                 <div className="flex items-center justify-between pt-1 text-xs">
                   <span className="text-emerald-600 font-semibold flex items-center space-x-1 text-[11px]">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>EMR Hoạt động</span>
+                    <span>EMR Chuẩn Y Khoa</span>
                   </span>
                   <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEdit(p)}
-                      className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg transition"
-                      title="Chỉnh sửa Bệnh án Lâm sàng EMR"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setPatientToDelete(p);
                       }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                       title={`Xóa hồ sơ bệnh nhân ${p.name}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />

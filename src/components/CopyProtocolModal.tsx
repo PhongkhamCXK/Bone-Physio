@@ -40,9 +40,10 @@ export const CopyProtocolModal: React.FC<CopyProtocolModalProps> = ({
 
   const filteredTreatments = existingTreatments.filter(
     (t) =>
-      t.patientName.toLowerCase().includes(search.toLowerCase()) ||
+      Boolean(t.plan && t.plan.trim() !== '') &&
+      (t.patientName.toLowerCase().includes(search.toLowerCase()) ||
       t.bodyPart.toLowerCase().includes(search.toLowerCase()) ||
-      t.plan.toLowerCase().includes(search.toLowerCase())
+      t.plan.toLowerCase().includes(search.toLowerCase()))
   );
 
   const handleCopy = (
