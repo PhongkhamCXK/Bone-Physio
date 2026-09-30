@@ -8,6 +8,7 @@ import {
   ChatConversation,
   ChatMessage,
   WarrantyRecord,
+  SessionSchedule,
 } from '../types';
 import { INITIAL_CHAT_CONVERSATIONS } from '../data/chatSeedData';
 import {
@@ -40,6 +41,7 @@ import {
   CalendarClock,
   ListTodo,
   Upload,
+  Stethoscope,
 } from 'lucide-react';
 import { PatientAvatar, AGE_CATEGORY_MAP, getCategoryByAge, ALL_AVATAR_PRESETS } from './PatientAvatar';
 import { PatientDailyChecklist, getDefaultDailyTasks } from './PatientDailyChecklist';
@@ -1113,7 +1115,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               <div className="space-y-4">
                 {patientTreatments.map((t) => {
                   const totalCount = t.total || 10;
-                  const currentSessions = (t.sessions && t.sessions.length > 0)
+                  const currentSessions: SessionSchedule[] = (t.sessions && t.sessions.length > 0)
                     ? t.sessions
                     : Array.from({ length: totalCount }, (_, i) => ({
                         number: i + 1,
@@ -1123,6 +1125,8 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                         clinicConfirmed: i < t.done,
                         patientConfirmed: false,
                         technician: t.doctor || 'BS. CKII Hoàng Minh',
+                        doctor: t.doctor || 'BS. CKII Hoàng Minh',
+                        isCheckpoint: (i + 1) % 7 === 0 || i + 1 === totalCount,
                         result: i < t.done ? 'Tiến triển khả quan, giảm đau rõ rệt' : undefined,
                       }));
 

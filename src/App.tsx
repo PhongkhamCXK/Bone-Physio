@@ -291,7 +291,7 @@ export default function App() {
             session: s,
             patientName: t.patientName,
             bodyPart: t.bodyPart,
-            reason: `KTV đã duyệt, nhưng Bệnh nhân (${t.patientName}) chưa ấn xác nhận buổi ${s.number}`,
+            reason: `KTV đã ấn xác nhận, nhưng Bệnh nhân (${t.patientName}) chưa ấn xác nhận buổi ${s.number}`,
           });
         } else if (!clinicDone && patientDone) {
           list.push({
@@ -299,7 +299,7 @@ export default function App() {
             session: s,
             patientName: t.patientName,
             bodyPart: t.bodyPart,
-            reason: `Bệnh nhân (${t.patientName}) đã ấn xác nhận buổi ${s.number}, nhưng KTV chưa duyệt`,
+            reason: `Bệnh nhân (${t.patientName}) đã ấn xác nhận buổi ${s.number}, nhưng KTV chưa ấn xác nhận`,
           });
         } else if (!clinicDone && !patientDone && (s.date === todayStr || (s.number <= t.done && t.done > 0))) {
           list.push({
@@ -1260,6 +1260,22 @@ export default function App() {
     }
   };
 
+  // Role Standard Treatments handlers
+  const handleUpdateRoleStandardTreatment = (updated: RoleStandardTreatment) => {
+    setRoleStandardTreatments((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    showToast(`Đã cập nhật điều trị chuẩn: ${updated.name}`);
+  };
+
+  const handleAddRoleStandardTreatment = (newItem: RoleStandardTreatment) => {
+    setRoleStandardTreatments((prev) => [newItem, ...prev]);
+    showToast(`Đã thêm điều trị chuẩn mới: ${newItem.name}`);
+  };
+
+  const handleDeleteRoleStandardTreatment = (id: string) => {
+    setRoleStandardTreatments((prev) => prev.filter((item) => item.id !== id));
+    showToast('Đã xóa điều trị chuẩn.');
+  };
+
   // Staff handlers
   const handleAddStaff = (staff: Staff) => {
     setStaffList((prev) => [staff, ...prev]);
@@ -1622,10 +1638,15 @@ export default function App() {
               <TechniciansTab
                 technicians={technicians}
                 appointments={appointments}
+                roleStandardTreatments={roleStandardTreatments}
                 onAddTechnician={handleAddTechnician}
                 onUpdateTechnician={handleUpdateTechnician}
                 onDeleteTechnician={handleDeleteTechnician}
+                onUpdateRoleStandardTreatment={handleUpdateRoleStandardTreatment}
+                onAddRoleStandardTreatment={handleAddRoleStandardTreatment}
+                onDeleteRoleStandardTreatment={handleDeleteRoleStandardTreatment}
                 onOpenQuickCheckInOut={() => setIsCheckInOutModalOpen(true)}
+                currentUser={currentUser}
               />
             )}
 
