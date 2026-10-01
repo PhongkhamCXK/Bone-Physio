@@ -12,6 +12,7 @@ import {
   Expense,
   WarrantyRecord,
   RoleStandardTreatment,
+  EMRAuditLog,
 } from '../types';
 import { STANDARD_EMR_TEMPLATES } from './standardEMRData';
 import { PATIENT_CLINICAL_HISTORIES, getDefaultClinicalDetails } from './patientClinicalHistory';
@@ -856,11 +857,138 @@ const RAW_INITIAL_PATIENTS: Patient[] = [
   },
 ];
 
+const DEFAULT_INITIAL_AUDIT_LOGS: Record<string, EMRAuditLog[]> = {
+  BN001: [
+    {
+      id: 'log_001_4',
+      timestamp: getRelativeDateStr(0) + ' 08:30:00',
+      performedBy: 'BS. CKII Hoàng Minh',
+      role: 'Bác sĩ CK Cột Sống / Trưởng khoa',
+      action: 'Điều chỉnh ngày khám nhắc',
+      details: 'Đã hẹn khám nhắc ngày ' + getRelativeDateStr(2) + ' để đo lại góc Cobb và kiểm tra tư thế cột sống ngực sau 5 buổi nắn chỉnh giải áp.',
+      treatmentPlan: 'Phác đồ Nắn chỉnh Giải áp Cột sống & Sóng xung kích chỉnh gù ngực học đường (10 buổi)',
+      bodyPart: 'Cột sống ngực',
+      previousValue: 'Chưa hẹn',
+      newValue: getRelativeDateStr(2),
+    },
+    {
+      id: 'log_001_3',
+      timestamp: getRelativeDateStr(-1) + ' 16:15:00',
+      performedBy: 'BS. CKII Hoàng Minh',
+      role: 'Bác sĩ CK Cột Sống / Trưởng khoa',
+      action: 'Cập nhật phác đồ & phương pháp trị liệu',
+      details: 'Bác sĩ chỉ định phối hợp 9/11 phương pháp: Sock wave, EBS, TEN, chiếu đèn cấp dưỡng, Giãn cơ, Di cơ, Tác động cột sống, Chế độ dinh dưỡng, Chế độ tập luyện tại nhà.',
+      treatmentPlan: 'Phác đồ Nắn chỉnh Giải áp Cột sống & Sóng xung kích chỉnh gù ngực học đường (10 buổi)',
+      bodyPart: 'Cột sống ngực',
+    },
+    {
+      id: 'log_001_2',
+      timestamp: getRelativeDateStr(-1) + ' 15:00:00',
+      performedBy: 'BS. CKI Nguyễn Văn An',
+      role: 'Bác sĩ Phục Hồi Chức Năng',
+      action: 'Cập nhật tiến độ buổi tập',
+      details: 'Bác sĩ kiểm tra và cập nhật tiến độ đạt 4/10 buổi. Bệnh nhân đỡ mỏi lưng, giảm đau từ VAS 6 xuống 3/10.',
+      treatmentPlan: 'Phác đồ Nắn chỉnh Giải áp Cột sống & Sóng xung kích chỉnh gù ngực học đường (10 buổi)',
+      bodyPart: 'Cột sống ngực',
+      previousValue: '3/10 buổi',
+      newValue: '4/10 buổi',
+    },
+    {
+      id: 'log_001_1',
+      timestamp: getRelativeDateStr(-2) + ' 09:15:00',
+      performedBy: 'BS. CKII Hoàng Minh',
+      role: 'Bác sĩ CK Cột Sống / Trưởng khoa',
+      action: 'Khởi tạo phác đồ điều trị ban đầu',
+      details: 'Kê phác đồ Nắn chỉnh Giải áp Cột sống & Sóng xung kích chỉnh gù ngực học đường (10 buổi). Chỉ định Sock wave 2500 shocks và nắn chỉnh giải áp.',
+      treatmentPlan: 'Phác đồ Nắn chỉnh Giải áp Cột sống & Sóng xung kích chỉnh gù ngực học đường (10 buổi)',
+      bodyPart: 'Cột sống ngực',
+    },
+  ],
+  BN002: [
+    {
+      id: 'log_002_3',
+      timestamp: getRelativeDateStr(0) + ' 09:00:00',
+      performedBy: 'BS. CKI Nguyễn Văn An',
+      role: 'Bác sĩ Phục Hồi Chức Năng',
+      action: 'Điều chỉnh ngày khám nhắc',
+      details: 'Hẹn tái khám ngày ' + getRelativeDateStr(3) + ' để đo lại chu vi vòng đùi và góc gập duỗi gối chủ động.',
+      treatmentPlan: 'Phác đồ Phục hồi chức năng sau mổ Dây chằng chéo trước ACL & Kích thích cơ sinh học (12 buổi)',
+      bodyPart: 'Khớp gối',
+    },
+    {
+      id: 'log_002_2',
+      timestamp: getRelativeDateStr(-1) + ' 14:30:00',
+      performedBy: 'BS. CKI Nguyễn Văn An',
+      role: 'Bác sĩ Phục Hồi Chức Năng',
+      action: 'Cập nhật phác đồ & phương pháp trị liệu',
+      details: 'Bác sĩ chỉ định: EBS, TEN, chiếu đèn cấp dưỡng, Giãn cơ, Di cơ, Bài tập vận động tại chỗ, Chế độ tập luyện tại nhà.',
+      treatmentPlan: 'Phác đồ Phục hồi chức năng sau mổ Dây chằng chéo trước ACL & Kích thích cơ sinh học (12 buổi)',
+      bodyPart: 'Khớp gối',
+    },
+    {
+      id: 'log_002_1',
+      timestamp: getRelativeDateStr(-3) + ' 10:00:00',
+      performedBy: 'BS. CKI Nguyễn Văn An',
+      role: 'Bác sĩ Phục Hồi Chức Năng',
+      action: 'Khởi tạo phác đồ điều trị ban đầu',
+      details: 'Kê phác đồ phục hồi sau mổ ACL (12 buổi). Mục tiêu: Đạt ROM gập gối 125 độ và kiểm soát sưng nề.',
+      treatmentPlan: 'Phác đồ Phục hồi chức năng sau mổ Dây chằng chéo trước ACL & Kích thích cơ sinh học (12 buổi)',
+      bodyPart: 'Khớp gối',
+    },
+  ],
+};
+
+const DEFAULT_PATIENT_PLANS: Record<string, string> = {
+  BN001: 'Phác đồ Nắn chỉnh Giải áp Cột sống & Sóng xung kích chỉnh gù ngực học đường (10 buổi)',
+  BN002: 'Phác đồ Phục hồi chức năng sau mổ Dây chằng chéo trước ACL & Kích thích cơ sinh học (12 buổi)',
+  BN003: 'Phác đồ Giảm áp Đĩa đệm DTS & Laser cường độ cao L4-L5 (10 buổi)',
+  BN004: 'Phác đồ Sóng siêu âm xung điều trị & Laser cường độ cao Viêm chóp xoay cấp (8 buổi)',
+  BN005: 'Phác đồ Nới lỏng cơ Myofascial & Điện xung giải cơ thang cổ vai gáy (6 buổi)',
+  BN006: 'Phác đồ Giải chèn ép thần kinh giữa Ống cổ tay & Siêu âm xung dẫn thuốc (8 buổi)',
+  BN007: 'Phác đồ Sóng xung kích hội tụ & Siêu âm trị liệu Viêm gân gót Achilles (10 buổi)',
+  BN008: 'Phác đồ Giảm áp đĩa đệm cột sống cổ DTS & Laser công suất cao thoát vị C5-C6 (12 buổi)',
+  BN009: 'Phác đồ Nắn chỉnh phục hồi vẹo cột sống & Bài tập Schroth chuyên sâu (15 buổi)',
+  BN010: 'Phác đồ Nắn chỉnh Chiropractic & Kéo dãn cơ chậu hông Viêm khớp cùng chậu (8 buổi)',
+};
+
 export const INITIAL_PATIENTS: Patient[] = RAW_INITIAL_PATIENTS.map((p) => {
   const clinical = PATIENT_CLINICAL_HISTORIES[p.id];
+  const auditLogs = DEFAULT_INITIAL_AUDIT_LOGS[p.id] || [
+    {
+      id: uid('log'),
+      timestamp: getRelativeDateStr(-1) + ' 09:30:00',
+      performedBy: 'BS. CKII Hoàng Minh',
+      role: 'Bác sĩ CK Cột Sống / Trưởng khoa',
+      action: 'Khởi tạo phác đồ điều trị',
+      details: `Kê phác đồ điều trị chuyên sâu vùng ${p.bodyPart}. Chỉ định phối hợp các phương pháp Sock wave, EBS, TEN, Chiếu đèn, Giãn cơ, Di cơ, Tác động cột sống.`,
+      treatmentPlan: DEFAULT_PATIENT_PLANS[p.id] || `Phác đồ điều trị chuyên sâu vùng ${p.bodyPart}`,
+      bodyPart: p.bodyPart,
+    },
+  ];
+
+  const defaultModalities = [
+    'Sock wave',
+    'EBS',
+    'TEN',
+    'chiếu đèn cấp dưỡng',
+    'Giãn cơ',
+    'Di cơ',
+    'Tác động cột sống',
+    'chế độ dinh dưỡng',
+    'chế độ tập luyện tại nhà',
+    'Bài tập vận động tại chỗ',
+  ];
+
+  const base: Patient = {
+    ...p,
+    treatmentPlan: DEFAULT_PATIENT_PLANS[p.id] || `Phác đồ điều trị vùng ${p.bodyPart}`,
+    modalities: defaultModalities,
+    auditLogs,
+  };
+
   if (clinical) {
     return {
-      ...p,
+      ...base,
       presentIllness: p.presentIllness || clinical.presentIllness,
       pastMedicalHistory: p.pastMedicalHistory || clinical.pastMedicalHistory,
       surgicalHistory: p.surgicalHistory || clinical.surgicalHistory,
@@ -870,7 +998,7 @@ export const INITIAL_PATIENTS: Patient[] = RAW_INITIAL_PATIENTS.map((p) => {
       preliminaryDiagnosis: p.preliminaryDiagnosis || clinical.preliminaryDiagnosis,
     };
   }
-  return p;
+  return base;
 });
 
 export const INITIAL_TREATMENTS: Treatment[] = [

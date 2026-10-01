@@ -31,14 +31,17 @@
     visibility: visible;
   }
   .print-area {
+    display: block !important;
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     padding: 24px;
     background: #ffffff;
+    color: #0f172a;
   }
   .no-print {
     display: none !important;
   }
 }
+

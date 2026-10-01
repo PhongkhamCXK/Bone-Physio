@@ -14,6 +14,7 @@ import { INITIAL_CHAT_CONVERSATIONS } from '../data/chatSeedData';
 import {
   FileText,
   Activity,
+  Target,
   Calendar,
   Layers,
   Dumbbell,
@@ -21,6 +22,7 @@ import {
   Utensils,
   Sparkles,
   CheckCircle2,
+  BookOpen,
   MessageSquare,
   Send,
   Video,
@@ -83,8 +85,23 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
     setPatientData(patient);
   }, [patient]);
 
+  const hasDailyChecklist = Boolean(
+    (patientData.dailyChecklist && patientData.dailyChecklist.length > 0) ||
+    getDefaultDailyTasks(patientData, exercises).length > 0
+  );
+
+  useEffect(() => {
+    if (!hasDailyChecklist && activeSubTab === 'checklist') {
+      setActiveSubTab('overview');
+    }
+  }, [hasDailyChecklist, activeSubTab]);
+
   const handleToggleChecklistTask = (taskId: string) => {
-    const currentTasks = patientData.dailyChecklist || [];
+    const currentTasks =
+      patientData.dailyChecklist && patientData.dailyChecklist.length > 0
+        ? patientData.dailyChecklist
+        : getDefaultDailyTasks(patientData, exercises);
+
     const updatedTasks = currentTasks.map((t) =>
       t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t
     );
@@ -552,32 +569,54 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
           </div>
         </div>
 
+        {/* THÔNG BÁO BẢO VỆ DỮ LIỆU & CHẾ ĐỘ CHỈ THEO DÕI CỦA BỆNH NHÂN */}
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/70 to-slate-50 border border-blue-200/80 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="flex items-center space-x-2.5">
+            <span className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs flex-shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </span>
+            <div>
+              <span className="font-extrabold text-slate-900 block">
+                Chế độ Tra Cứu &amp; Theo Dõi Dành Cho Bệnh Nhân (Read-Only Chuyên Môn)
+              </span>
+              <p className="text-slate-600 text-[11px] mt-0.5">
+                Bệnh nhân được phân quyền <strong>theo dõi chỉ số ban đầu, tiến triển sau từng buổi, mục tiêu điều trị, xem bài tập về nhà và chat trực tiếp với Bác sĩ</strong>. Toàn bộ hồ sơ bệnh án và phác đồ được bảo vệ an toàn, bệnh nhân không được tự ý sửa đổi / thêm / bớt.
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-white border border-blue-200 rounded-xl text-[11px] font-bold text-blue-700 whitespace-nowrap self-start sm:self-auto shadow-2xs flex items-center space-x-1">
+            <span>🔒 Hồ sơ đã được Bác sĩ khóa bảo mật</span>
+          </span>
+        </div>
+
         {/* Primary Navigation Switcher */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveSubTab('checklist');
-              if (onSwitchTab) onSwitchTab('checklist');
-            }}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
-              activeSubTab === 'checklist'
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <ListTodo className="w-4 h-4" />
-            <span>Kế Hoạch & Việc Cần Làm</span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+          {hasDailyChecklist && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSubTab('checklist');
+                if (onSwitchTab) onSwitchTab('checklist');
+              }}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
                 activeSubTab === 'checklist'
-                  ? 'bg-white text-orange-700'
-                  : 'bg-amber-100 text-amber-900'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
             >
-              {completedChecklistCount}/{totalChecklistCount}
-            </span>
-          </button>
+              <ListTodo className="w-4 h-4" />
+              <span>Kế Hoạch & Việc Cần Làm</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  activeSubTab === 'checklist'
+                    ? 'bg-white text-orange-700'
+                    : 'bg-amber-100 text-amber-900'
+                }`}
+              >
+                {completedChecklistCount}/{totalChecklistCount}
+              </span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -651,11 +690,13 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
       {activeSubTab === 'overview' && (
         <div className="space-y-6">
           {/* Mục Việc Cần Làm Hôm Nay & Lời Nhắc Đầu Ngày */}
-          <PatientDailyChecklist
-            patient={patientData}
-            exercises={exercises}
-            onToggleTask={handleToggleChecklistTask}
-          />
+          {hasDailyChecklist && (
+            <PatientDailyChecklist
+              patient={patientData}
+              exercises={exercises}
+              onToggleTask={handleToggleChecklistTask}
+            />
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column: EMR Detail & Progression & Treatments */}
@@ -867,6 +908,67 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                 })()}
               </div>
             )}
+
+
+            {/* MỤC TIÊU ĐIỀU TRỊ BỆNH DO BÁC SĨ THIẾT LẬP (BỆNH NHÂN THEO DÕI) */}
+            <div className="bg-gradient-to-br from-emerald-50/90 via-teal-50/50 to-white p-5 rounded-3xl border border-emerald-200 shadow-sm space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-100 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/25 flex-shrink-0">
+                    <Target className="w-5 h-5 text-emerald-100" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                      <span>Mục Tiêu Điều Trị Bệnh &amp; Kỳ Vọng Phục Hồi</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        Bác sĩ thiết lập
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Đích đến cần đạt được sau khi kết thúc liệu trình {primaryTreatment?.bodyPart || patient.bodyPart}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold text-emerald-800 bg-white px-3 py-1 rounded-xl border border-emerald-200">
+                  🎯 Đích Đến Lâm Sàng
+                </span>
+              </div>
+
+              {/* Danh sách mục tiêu điều trị cụ thể */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {(() => {
+                  const defaultGoals = [
+                    `Triệt tiêu cơn đau cấp tính, hạ điểm đau VAS từ ${effectiveMetrics[0]?.painScore || 7}/10 xuống dưới 2/10`,
+                    `Phục hồi biên độ vận động khớp & cột sống ${patient.bodyPart} đạt trên 90% tầm vận động chuẩn`,
+                    `Giải phóng hoàn toàn co thắt cơ và các điểm kích hoạt Myofascial Trigger Point`,
+                    `Tăng cường sức mạnh nhóm cơ lõi và cơ bảo vệ khớp, ngăn ngừa tái phát mạn tính`,
+                    `Duy trì thói quen tập luyện tự phục hồi tại nhà 15-20 phút mỗi ngày theo video hướng dẫn`,
+                  ];
+                  const goals = (patient.treatmentGoals && patient.treatmentGoals.length > 0)
+                    ? patient.treatmentGoals
+                    : defaultGoals;
+
+                  return goals.map((goal, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-white p-3 rounded-2xl border border-emerald-100 shadow-2xs flex items-start space-x-2.5"
+                    >
+                      <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs flex-shrink-0 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <div className="space-y-0.5 flex-1">
+                        <span className="font-semibold text-slate-800 block leading-relaxed">
+                          {goal}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 font-bold block">
+                          Tiến độ: Đang điều trị theo phác đồ ({Math.round(progressPercent)}%)
+                        </span>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
 
             {/* CÁC CHỈ SỐ LÂM SÀNG BAN ĐẦU CỦA BÁC SĨ (Baseline Metrics) */}
             <div className="bg-gradient-to-r from-blue-50 via-indigo-50/60 to-purple-50/40 p-5 rounded-3xl border border-blue-200/80 shadow-xs space-y-4">
@@ -1236,19 +1338,21 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                                   {isBothDone ? (
                                     <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px] flex items-center space-x-1">
                                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                      <span>✓ 2/2 bên đã xác nhận</span>
+                                      <span>✓ Đã làm (2/2 bên xác nhận)</span>
                                     </span>
                                   ) : isPatientDone && !isClinicDone ? (
-                                    <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200 font-bold text-[10px] flex items-center space-x-1">
-                                      <span>✓ Bạn đã ấn (Chờ KTV)</span>
+                                    <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[10px] flex items-center space-x-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>✓ Đã làm (Bạn đã xác nhận)</span>
                                     </span>
                                   ) : !isPatientDone && isClinicDone ? (
-                                    <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center space-x-1 animate-pulse">
-                                      <span>⚠️ KTV đã ấn (Chờ bạn ấn)</span>
+                                    <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-900 border border-blue-300 font-bold text-[10px] flex items-center space-x-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>✓ KTV đã làm (Chờ bạn tích)</span>
                                     </span>
                                   ) : (
                                     <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-[10px] font-medium">
-                                      Chưa bên nào ấn
+                                      Chưa xác nhận
                                     </span>
                                   )}
 
@@ -1285,108 +1389,110 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               </div>
             </div>
 
-            {/* HIGHLIGHT: Assigned Home Exercises Quick View */}
-            <div className="bg-gradient-to-br from-blue-50/80 via-indigo-50/50 to-white p-5 rounded-3xl border border-blue-200 space-y-4 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center space-x-2.5">
-                  <span className="w-9 h-9 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-600/20">
-                    <Dumbbell className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                      <span>Bài Tập Bác Sĩ Chỉ Định Tự Tập Tại Nhà</span>
-                      <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
-                        {assignedExs.length} bài
-                      </span>
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Chỉ định bởi: <strong>{patient.revisitDoctor || 'BS. CKII Hoàng Minh'}</strong> • Phù hợp vùng {patient.bodyPart}
-                    </p>
+            {/* HIGHLIGHT: Assigned Home Exercises Quick View (Chỉ hiển thị nếu có bài tập được gán, nếu trống thì bỏ đi) */}
+            {assignedExs.length > 0 && (
+              <div className="bg-gradient-to-br from-blue-50/80 via-indigo-50/50 to-white p-5 rounded-3xl border border-blue-200 space-y-4 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="w-9 h-9 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-600/20">
+                      <Dumbbell className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                        <span>Bài Tập Bác Sĩ Chỉ Định Tự Tập Tại Nhà</span>
+                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
+                          {assignedExs.length} bài
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Chỉ định bởi: <strong>{patient.revisitDoctor || 'BS. CKII Hoàng Minh'}</strong> • Phù hợp vùng {patient.bodyPart}
+                      </p>
+                    </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubTab('exercises')}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-md shadow-blue-600/20 transition self-start sm:self-auto cursor-pointer"
+                  >
+                    <span>Xem Chi Tiết & Video</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveSubTab('exercises')}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-md shadow-blue-600/20 transition self-start sm:self-auto cursor-pointer"
-                >
-                  <span>Xem Chi Tiết & Video</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {assignedExs.map((ex) => {
+                    const isDone = completedExIds.includes(ex.id);
+                    return (
+                      <div
+                        key={ex.id}
+                        className={`p-4 rounded-2xl border transition ${
+                          isDone
+                            ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                            : 'bg-white border-slate-200 text-slate-900 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <span className="text-xs font-bold leading-snug">
+                            {ex.name}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                            {ex.bodyPart}
+                          </span>
+                        </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {assignedExs.map((ex) => {
-                  const isDone = completedExIds.includes(ex.id);
-                  return (
-                    <div
-                      key={ex.id}
-                      className={`p-4 rounded-2xl border transition ${
-                        isDone
-                          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                          : 'bg-white border-slate-200 text-slate-900 shadow-2xs'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <span className="text-xs font-bold leading-snug">
-                          {ex.name}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
-                          {ex.bodyPart}
-                        </span>
-                      </div>
+                        <p className="text-[11px] text-slate-600 line-clamp-2 mb-2 leading-relaxed">
+                          {ex.description}
+                        </p>
 
-                      <p className="text-[11px] text-slate-600 line-clamp-2 mb-2 leading-relaxed">
-                        {ex.description}
-                      </p>
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                          <span className="text-[11px] font-bold text-blue-700 flex items-center space-x-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{ex.setsReps}</span>
+                          </span>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <span className="text-[11px] font-bold text-blue-700 flex items-center space-x-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{ex.setsReps}</span>
-                        </span>
-
-                        <div className="flex items-center space-x-1.5">
-                          {ex.videoUrl && (
+                          <div className="flex items-center space-x-1.5">
+                            {ex.videoUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveVideoEx(ex)}
+                                className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                title="Xem video bài tập"
+                              >
+                                <Video className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => setActiveVideoEx(ex)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                              title="Xem video bài tập"
+                              onClick={() => toggleCompleteExercise(ex.id)}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center space-x-1 transition cursor-pointer ${
+                                isDone
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              }`}
                             >
-                              <Video className="w-4 h-4" />
+                              <Check className="w-3 h-3" />
+                              <span>{isDone ? 'Đã tập' : 'Đánh dấu đã tập'}</span>
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => toggleCompleteExercise(ex.id)}
-                            className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center space-x-1 transition cursor-pointer ${
-                              isDone
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                            }`}
-                          >
-                            <Check className="w-3 h-3" />
-                            <span>{isDone ? 'Đã tập' : 'Đánh dấu đã tập'}</span>
-                          </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Right Column: Appointments, Invoices & Diet Plan & Chat */}
           <div className="space-y-6">
-            {/* Appointments */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                <Calendar className="w-4 h-4 text-blue-600" />
-                <span>Lịch Hẹn Của Tôi</span>
-              </h4>
-              {myAppts.length > 0 ? (
+            {/* Appointments (Chỉ hiển thị nếu có lịch hẹn, nếu trống thì bỏ mục này đi) */}
+            {myAppts.length > 0 && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                  <span>Lịch Hẹn Của Tôi ({myAppts.length})</span>
+                </h4>
                 <div className="space-y-2">
                   {myAppts.map((a) => (
                     <div
@@ -1402,20 +1508,16 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic">
-                  Chưa có lịch hẹn sắp tới.
-                </p>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Invoices */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                <CreditCard className="w-4 h-4 text-emerald-600" />
-                <span>Hóa Đơn Của Tôi</span>
-              </h4>
-              {myInvoices.length > 0 ? (
+            {/* Invoices (Chỉ hiển thị nếu có hóa đơn, nếu trống thì bỏ mục này đi) */}
+            {myInvoices.length > 0 && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                  <CreditCard className="w-4 h-4 text-emerald-600" />
+                  <span>Hóa Đơn Của Tôi ({myInvoices.length})</span>
+                </h4>
                 <div className="space-y-2">
                   {myInvoices.map((inv) => (
                     <div
@@ -1437,12 +1539,8 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic">
-                  Chưa có hóa đơn nào.
-                </p>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Diet Plan */}
             {patient.dietPlan && (
@@ -2140,7 +2238,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
       )}
 
       {/* VIEW 4: DAILY CHECKLIST & ACTION PLAN */}
-      {activeSubTab === 'checklist' && (
+      {activeSubTab === 'checklist' && hasDailyChecklist && (
         <div className="space-y-6">
           <PatientDailyChecklist
             patient={patientData}
@@ -2307,6 +2405,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
           </div>
         </div>
       )}
+
     </div>
   );
 };

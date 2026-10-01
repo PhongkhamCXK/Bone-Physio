@@ -1,10 +1,25 @@
 import React, { useState } from 'react';
-import { Patient, BodyRegion, Treatment, HealthMetric, Exercise, Appointment, WarrantyRecord, Invoice } from '../types';
+import {
+  Patient,
+  BodyRegion,
+  Treatment,
+  HealthMetric,
+  Exercise,
+  Appointment,
+  WarrantyRecord,
+  Invoice,
+  AppUser,
+  isDoctorUser,
+  EMRAuditLog,
+} from '../types';
 import { AddRegionModal } from './AddRegionModal';
 import { RevisitReminderConfirmationModal } from './dashboard/RevisitReminderConfirmationModal';
 import { ClinicalEMRFormModal } from './ClinicalEMRFormModal';
 import { ConfirmDeletePatientModal } from './ConfirmDeletePatientModal';
 import { ScheduleTreatmentModal } from './ScheduleTreatmentModal';
+import { DoctorPrescribedProtocolsSection } from './DoctorPrescribedProtocolsSection';
+import { EMRAuditLogSection } from './EMRAuditLogSection';
+import { CopyProtocolModal } from './CopyProtocolModal';
 import { RevisitItem } from '../utils/revisitUtils';
 import {
   X,
@@ -35,6 +50,7 @@ import {
   User,
   Users,
   ShieldAlert,
+  Lock,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
 
@@ -47,6 +63,7 @@ interface EMRDetailModalProps {
   appointments?: Appointment[];
   warranties?: WarrantyRecord[];
   invoices?: Invoice[];
+  currentUser?: AppUser | null;
   onDeletePatient?: (id: string, deleteRelatedData?: boolean) => void;
   onAddRegion: (newRegion: BodyRegion, autoTreatment: Treatment) => void;
   onUpdatePatient: (updated: Patient) => void;
@@ -63,17 +80,20 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   appointments = [],
   warranties = [],
   invoices = [],
+  currentUser,
   onDeletePatient,
   onAddRegion,
   onUpdatePatient,
   onUpdateTreatment,
   onNavigateToTreatments,
 }) => {
+  const isDoctor = isDoctorUser(currentUser);
   const [isAddRegionOpen, setIsAddRegionOpen] = useState(false);
   const [isAddMetricOpen, setIsAddMetricOpen] = useState(false);
   const [selectedExToAdd, setSelectedExToAdd] = useState<string>('');
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [scheduleModalTreatment, setScheduleModalTreatment] = useState<Treatment | null>(null);
+  const [isCopyProtocolOpen, setIsCopyProtocolOpen] = useState(false);
 
   // New metric form state
   const [metricDate, setMetricDate] = useState(
@@ -239,15 +259,25 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
               </p>
             </div>
             <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setIsEditEMROpen(true)}
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition active:scale-95"
-                title="Chỉnh sửa toàn diện bệnh án lâm sàng điện tử chuẩn y khoa"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Sửa Bệnh Án EMR</span>
-              </button>
+              {isDoctor ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditEMROpen(true)}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                  title="Chỉnh sửa toàn diện bệnh án lâm sàng điện tử chuẩn y khoa"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Sửa Bệnh Án EMR (Bác Sĩ)</span>
+                </button>
+              ) : (
+                <span
+                  className="px-3 py-1.5 bg-slate-100 text-slate-400 rounded-xl text-xs font-bold flex items-center space-x-1 border border-slate-200 cursor-not-allowed"
+                  title="Chỉ có Bác sĩ mới được chỉnh sửa bệnh án EMR"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Chỉ Bác Sĩ Mới Được Sửa EMR</span>
+                </span>
+              )}
               {onDeletePatient && (
                 <button
                   type="button"
@@ -335,14 +365,24 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                 </div>
 
                 {/* THE CORE BUTTON REQUESTED BY USER */}
-                <button
-                  type="button"
-                  onClick={() => setIsAddRegionOpen(true)}
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-md shadow-blue-600/25 transition flex-shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Tạo Thêm Vùng Mới</span>
-                </button>
+                {isDoctor ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddRegionOpen(true)}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-md shadow-blue-600/25 transition flex-shrink-0 cursor-pointer active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Tạo Thêm Vùng Mới</span>
+                  </button>
+                ) : (
+                  <span
+                    className="px-3.5 py-2 bg-slate-100 text-slate-400 rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-slate-200 cursor-not-allowed flex-shrink-0"
+                    title="Chỉ Bác sĩ mới có quyền kê thêm vùng điều trị mới"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Chỉ Bác Sĩ Kê Thêm Vùng</span>
+                  </span>
+                )}
               </div>
 
               {/* List of regions (Initial + Additional) */}
@@ -359,12 +399,17 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                         Vùng ban đầu
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 mt-2 font-medium">
+                    <p className="text-xs text-slate-700 mt-2 font-semibold">
                       Chẩn đoán: {patient.diagnosis}
+                    </p>
+                    <p className="text-[11px] text-indigo-700 font-medium mt-1 line-clamp-2">
+                      Phác đồ bác sĩ chọn: {patient.treatmentPlan || patientTreatments[0]?.plan || 'Phác đồ phục hồi chuyên sâu'}
                     </p>
                   </div>
                   <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Liệu trình chính</span>
+                    <span className="text-blue-700 font-bold">
+                      {patientTreatments[0]?.total || 10} buổi ({patientTreatments[0]?.done || 0} đã xong) • {patient.modalities?.length || 9}/11 phương pháp
+                    </span>
                     {onNavigateToTreatments && (
                       <button
                         onClick={onNavigateToTreatments}
@@ -921,23 +966,32 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={handleClearEmptyEMR}
-                    className="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 active:scale-95 shadow-2xs"
-                    title="Xóa bỏ các trường bệnh án trống không có thông tin để làm gọn"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Xóa Dữ Liệu Bệnh Án Trống</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditEMROpen(true)}
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Cập Nhật Bệnh Án</span>
-                  </button>
+                  {isDoctor ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleClearEmptyEMR}
+                        className="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 active:scale-95 shadow-2xs cursor-pointer"
+                        title="Xóa bỏ các trường bệnh án trống không có thông tin để làm gọn"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Xóa Dữ Liệu Bệnh Án Trống</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditEMROpen(true)}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Cập Nhật Bệnh Án (Bác Sĩ)</span>
+                      </button>
+                    </>
+                  ) : (
+                    <span className="px-3 py-1.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-xl text-xs font-bold flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>🔒 Chỉ Bác Sĩ Mới Được Sửa EMR</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1305,21 +1359,31 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   </div>
             </div>
 
-            {/* Active treatments linked */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center">
-                    <Calendar className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
-                    Các Liệu Trình Đang Quản Lý Cho Bệnh Nhân Này ({patientTreatments.length})
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Sắp xếp phác đồ điều trị, tích xác nhận đã làm 2 bên (Bệnh nhân &amp; KTV) và cập nhật kết quả từng buổi
-                  </p>
-                </div>
-              </div>
+            {/* 1. PHÁC ĐỒ & 11 PHƯƠNG PHÁP TRỊ LIỆU BÁC SĨ CHỌN */}
+            <DoctorPrescribedProtocolsSection
+              patient={patient}
+              treatments={treatments}
+              currentUser={currentUser}
+              onUpdatePatient={onUpdatePatient}
+              onUpdateTreatment={onUpdateTreatment}
+              onOpenProtocolLibrary={() => setIsCopyProtocolOpen(true)}
+            />
 
-              {patientTreatments.length > 0 ? (
+            {/* Active treatments linked (Chỉ hiển thị nếu có liệu trình, nếu trống thì bỏ mục này đi) */}
+            {patientTreatments.length > 0 && (
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center">
+                      <Calendar className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
+                      Các Liệu Trình Đang Quản Lý Cho Bệnh Nhân Này ({patientTreatments.length})
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Sắp xếp phác đồ điều trị, tích xác nhận đã làm 2 bên (Bệnh nhân &amp; KTV) và cập nhật kết quả từng buổi
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-3">
                   {patientTreatments.map((t) => {
                     const sessions = t.sessions || [];
@@ -1423,12 +1487,14 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                                           <span>✓ Đã làm (2/2 bên)</span>
                                         </span>
                                       ) : isClinicConfirmed && !isPatientConfirmed ? (
-                                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 font-bold text-[10px]">
-                                          ✓ KTV xác nhận (Chờ BN)
+                                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[10px] flex items-center space-x-1 shadow-2xs">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          <span>✓ Đã làm (KTV/BS xác nhận)</span>
                                         </span>
                                       ) : !isClinicConfirmed && isPatientConfirmed ? (
-                                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[10px]">
-                                          ✓ BN xác nhận (Chờ KTV)
+                                        <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-bold text-[10px] flex items-center space-x-1">
+                                          <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                                          <span>✓ Đã làm (BN xác nhận)</span>
                                         </span>
                                       ) : (
                                         <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px]">
@@ -1494,112 +1560,124 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                     );
                   })}
                 </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic">
-                  Chưa có liệu trình nào được gán cho bệnh nhân này.
-                </p>
-              )}
-            </div>
-
-            {/* Prescribed Home Exercises Management */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center">
-                    <Dumbbell className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
-                    Chỉ Định Bài Tập Tự Phục Hồi Tại Nhà Cho Bệnh Nhân ({patient.assignedExercises?.length || 0})
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Bệnh nhân sẽ thấy các bài tập này trên Cổng Bệnh Nhân kèm video và nhật ký tự tập
-                  </p>
-                </div>
-
-                {/* Quick Add Exercise Dropdown */}
-                <div className="flex items-center space-x-2">
-                  <select
-                    value={selectedExToAdd}
-                    onChange={(e) => {
-                      const exId = e.target.value;
-                      if (!exId) return;
-                      const current = patient.assignedExercises || [];
-                      if (!current.includes(exId)) {
-                        onUpdatePatient({
-                          ...patient,
-                          assignedExercises: [...current, exId],
-                        });
-                      }
-                      setSelectedExToAdd('');
-                    }}
-                    className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="">+ Chỉ định thêm bài tập...</option>
-                    {exercises.map((ex) => (
-                      <option
-                        key={ex.id}
-                        value={ex.id}
-                        disabled={patient.assignedExercises?.includes(ex.id)}
-                      >
-                        {ex.name} ({ex.bodyPart}) - {patient.assignedExercises?.includes(ex.id) ? 'Đã gán' : ex.setsReps}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
+            )}
 
-              {/* List of assigned exercises */}
-              {patient.assignedExercises && patient.assignedExercises.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {patient.assignedExercises.map((exId) => {
-                    const ex = exercises.find((e) => e.id === exId);
-                    if (!ex) return null;
-                    return (
-                      <div
-                        key={ex.id}
-                        className="bg-white p-3 rounded-xl border border-slate-200 flex items-start justify-between gap-2 shadow-2xs"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="text-xs font-bold text-slate-900 leading-snug">
-                              {ex.name}
-                            </span>
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                              {ex.bodyPart}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 line-clamp-1">
-                            {ex.description}
-                          </p>
-                          <span className="text-[10px] font-bold text-blue-600 block">
-                            Liều lượng: {ex.setsReps}
-                          </span>
-                        </div>
+            {/* 2. NHẬT KÝ CHỈNH SỬA LIỆU TRÌNH & EMR (Chỉ hiển thị nếu đã có nhật ký, nếu trống thì bỏ mục này đi) */}
+            {patient.auditLogs && patient.auditLogs.length > 0 && (
+              <EMRAuditLogSection
+                patient={patient}
+                treatments={treatments}
+                currentUser={currentUser}
+                onUpdatePatient={onUpdatePatient}
+              />
+            )}
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updatedList = (patient.assignedExercises || []).filter(
-                              (id) => id !== ex.id
-                            );
+            {/* Prescribed Home Exercises Management (Nếu không có bài tập và không phải Bác sĩ thì bỏ mục này đi) */}
+            {(isDoctor || (patient.assignedExercises && patient.assignedExercises.length > 0)) && (
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center">
+                      <Dumbbell className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
+                      Chỉ Định Bài Tập Tự Phục Hồi Tại Nhà Cho Bệnh Nhân ({patient.assignedExercises?.length || 0})
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Bệnh nhân sẽ thấy các bài tập này trên Cổng Bệnh Nhân kèm video và nhật ký tự tập
+                    </p>
+                  </div>
+
+                  {/* Quick Add Exercise Dropdown (Chỉ Bác sĩ mới được quyền chỉ định) */}
+                  {isDoctor && (
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={selectedExToAdd}
+                        onChange={(e) => {
+                          const exId = e.target.value;
+                          if (!exId) return;
+                          const current = patient.assignedExercises || [];
+                          if (!current.includes(exId)) {
                             onUpdatePatient({
                               ...patient,
-                              assignedExercises: updatedList,
+                              assignedExercises: [...current, exId],
                             });
-                          }}
-                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Hủy chỉ định bài tập này"
+                          }
+                          setSelectedExToAdd('');
+                        }}
+                        className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                      >
+                        <option value="">+ Chỉ định thêm bài tập...</option>
+                        {exercises.map((ex) => (
+                          <option
+                            key={ex.id}
+                            value={ex.id}
+                            disabled={patient.assignedExercises?.includes(ex.id)}
+                          >
+                            {ex.name} ({ex.bodyPart}) - {patient.assignedExercises?.includes(ex.id) ? 'Đã gán' : ex.setsReps}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* List of assigned exercises */}
+                {patient.assignedExercises && patient.assignedExercises.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {patient.assignedExercises.map((exId) => {
+                      const ex = exercises.find((e) => e.id === exId);
+                      if (!ex) return null;
+                      return (
+                        <div
+                          key={ex.id}
+                          className="bg-white p-3 rounded-xl border border-slate-200 flex items-start justify-between gap-2 shadow-2xs"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="p-3 bg-white rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 italic">
-                  Chưa chỉ định bài tập tự tập tại nhà nào. Bác sĩ hãy chọn bài tập từ danh sách trên để gán cho bệnh nhân.
-                </div>
-              )}
-            </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-xs font-bold text-slate-900 leading-snug">
+                                {ex.name}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                {ex.bodyPart}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 line-clamp-1">
+                              {ex.description}
+                            </p>
+                            <span className="text-[10px] font-bold text-blue-600 block">
+                              Liều lượng: {ex.setsReps}
+                            </span>
+                          </div>
+
+                          {isDoctor && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedList = (patient.assignedExercises || []).filter(
+                                  (id) => id !== ex.id
+                                );
+                                onUpdatePatient({
+                                  ...patient,
+                                  assignedExercises: updatedList,
+                                });
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                              title="Hủy chỉ định bài tập này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : isDoctor ? (
+                  <div className="p-3 bg-white rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 italic">
+                    Chưa chỉ định bài tập tự tập tại nhà nào. Bác sĩ hãy chọn bài tập từ danh sách trên để gán cho bệnh nhân.
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
 
           {/* Footer */}
@@ -1706,12 +1784,51 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
           isOpen={!!scheduleModalTreatment}
           treatment={scheduleModalTreatment}
           patient={patient}
+          currentUser={currentUser}
           onClose={() => setScheduleModalTreatment(null)}
           onSaveSchedule={(updatedTreatment) => {
             if (onUpdateTreatment) {
               onUpdateTreatment(updatedTreatment);
             }
             setScheduleModalTreatment(null);
+          }}
+        />
+      )}
+
+      {/* Modal Thư Viện Phác Đồ Chuẩn Bác Sĩ */}
+      {isCopyProtocolOpen && (
+        <CopyProtocolModal
+          isOpen={isCopyProtocolOpen}
+          onClose={() => setIsCopyProtocolOpen(false)}
+          existingTreatments={treatments}
+          onSelectProtocol={(protoText, sessions, targetBodyPart) => {
+            if (!patient) return;
+            const newLog: EMRAuditLog = {
+              id: uid('log'),
+              timestamp: new Date().toLocaleString('vi-VN'),
+              performedBy: currentUser?.name || 'BS. CKII Hoàng Minh',
+              role: currentUser?.title || 'Bác sĩ phụ trách',
+              action: 'Chọn phác đồ điều trị từ thư viện chuẩn',
+              details: `Bác sĩ đã áp dụng phác đồ: "${protoText}" (${sessions || 10} buổi) cho vùng ${targetBodyPart || patient.bodyPart}.`,
+              treatmentPlan: protoText,
+              bodyPart: targetBodyPart || patient.bodyPart,
+            };
+            const updatedPatient: Patient = {
+              ...patient,
+              treatmentPlan: protoText,
+              auditLogs: [newLog, ...(patient.auditLogs || [])],
+            };
+            onUpdatePatient(updatedPatient);
+
+            const primaryT = patientTreatments[0];
+            if (primaryT && onUpdateTreatment) {
+              onUpdateTreatment({
+                ...primaryT,
+                plan: protoText,
+                total: sessions || primaryT.total,
+                bodyPart: targetBodyPart || primaryT.bodyPart,
+              });
+            }
           }}
         />
       )}

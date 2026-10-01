@@ -58,6 +58,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
   onNavigateToWarranty,
 }) => {
   const [search, setSearch] = useState('');
+  const [copySuccessToast, setCopySuccessToast] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
@@ -617,7 +618,8 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                             type="button"
                             onClick={() => {
                               navigator.clipboard?.writeText(t.plan);
-                              alert(`Đã copy phác đồ của ${t.patientName}! Bạn có thể dán vào liệu trình khác.`);
+                              setCopySuccessToast(`Đã sao chép phác đồ của ${t.patientName}!`);
+                              setTimeout(() => setCopySuccessToast(null), 3000);
                             }}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition"
                             title="Copy phác đồ này"
@@ -991,6 +993,13 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
             </div>
           }
         />
+      )}
+      {/* In-app Copy Toast */}
+      {copySuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 text-sm font-semibold animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <span>{copySuccessToast}</span>
+        </div>
       )}
     </div>
   );

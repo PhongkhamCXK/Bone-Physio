@@ -8,6 +8,7 @@ import {
   Wallet,
   Building,
   CheckCircle,
+  Award,
   Banknote,
   Trash2,
   Receipt,
@@ -301,8 +302,8 @@ export const BillingTab: React.FC<BillingTabProps> = ({
       {/* SUBTAB 1: TỔNG QUAN THU CHI & LỢI NHUẬN */}
       {accountingSubTab === 'overview' && (
         <div className="space-y-6">
-          {/* 4 Core Financial KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 5 Core Financial KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* 1. Tổng Thu */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
               <div className="flex items-center justify-between">
@@ -383,6 +384,23 @@ export const BillingTab: React.FC<BillingTabProps> = ({
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
                 Tỷ suất LN ròng: <strong className="text-emerald-600">{taxSummary.profitMarginPercent}%</strong>
+              </p>
+            </div>
+            {/* 5. Tỷ Suất LN & Hiệu Suất */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Tỷ Suất LN Ròng
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+              </div>
+              <h3 className="text-2xl font-black text-purple-700 mt-2">
+                {taxSummary.profitMarginPercent}%
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Doanh số kế toán: <strong className="text-slate-800">{formatCurrency(taxSummary.totalGrossInvoices)}</strong>
               </p>
             </div>
           </div>

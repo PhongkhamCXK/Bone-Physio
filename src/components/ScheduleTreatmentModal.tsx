@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Treatment, SessionSchedule, Patient, Appointment } from '../types';
+import { Treatment, SessionSchedule, Patient, Appointment, AppUser, isDoctorUser } from '../types';
 import {
   Calendar,
   Clock,
@@ -13,6 +13,7 @@ import {
   Check,
   ChevronRight,
   Flame,
+  Lock,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
 
@@ -21,6 +22,7 @@ interface ScheduleTreatmentModalProps {
   patient?: Patient;
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: AppUser | null;
   onSaveSchedule: (
     updatedTreatment: Treatment,
     autoCreateAppointment: boolean,
@@ -35,10 +37,12 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
   patient,
   isOpen,
   onClose,
+  currentUser,
   onSaveSchedule,
 }) => {
   if (!isOpen || !treatment) return null;
 
+  const isDoctor = isDoctorUser(currentUser);
   const total = treatment.total || 21;
   const initialStartDate =
     treatment.sessions && treatment.sessions[0]?.date
@@ -246,13 +250,19 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-shrink-0">
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               <span className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
                 <Calendar className="w-4 h-4" />
               </span>
               <h3 className="text-lg font-extrabold text-slate-900">
                 Sắp Xếp Liệu Trình & Ấn Định Ngày Khám Nhắc
               </h3>
+              {!isDoctor && (
+                <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs">
+                  <Lock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>🔒 Chế độ xem: Chỉ Bác sĩ mới được chỉnh sửa</span>
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               Bệnh nhân: <strong className="text-slate-800">{treatment.patientName}</strong>{' '}
@@ -588,14 +598,26 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
             >
               Hủy
             </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/25 transition flex items-center space-x-1.5"
-            >
-              <Save className="w-4 h-4" />
-              <span>Lưu Sắp Xếp Liệu Trình & Ngày Khám Nhắc</span>
-            </button>
+            {!isDoctor ? (
+              <button
+                type="button"
+                disabled
+                className="px-5 py-2.5 bg-slate-200 text-slate-500 rounded-xl text-xs font-bold cursor-not-allowed flex items-center space-x-1.5 border border-slate-300"
+                title="Chỉ có Bác sĩ mới được lưu chỉnh sửa phác đồ & lịch trình"
+              >
+                <Lock className="w-4 h-4" />
+                <span>🔒 Chỉ Bác Sĩ Mới Được Lưu Chỉnh Sửa</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/25 transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Bác Sĩ Lưu Sắp Xếp Liệu Trình & Ngày Khám Nhắc</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

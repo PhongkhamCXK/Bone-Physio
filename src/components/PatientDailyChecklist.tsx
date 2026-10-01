@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Patient, DailyChecklistTask, Exercise } from '../types';
 import {
   CheckCircle2,
+  ShieldCheck,
+  Lock,
   Circle,
   Clock,
   Flame,
@@ -49,7 +51,7 @@ export const getDefaultDailyTasks = (patient: Patient, exercises?: Exercise[]): 
     note: 'Giảm hiện tượng cứng khớp buổi sáng, không thực hiện các động tác vặn xoắn đột ngột',
   });
 
-  // 2. BÀI TẬP VỀ NHÀ (Gán từ dữ liệu bài tập về nhà của bệnh nhân)
+  // 2. BÀI TẬP VỀ NHÀ (Chỉ hiển thị nếu Bác sĩ đã chỉ định bài tập, nếu trống thì bỏ mục này đi)
   if (patient.assignedExercises && patient.assignedExercises.length > 0 && exercises && exercises.length > 0) {
     patient.assignedExercises.forEach((exId, idx) => {
       const foundEx = exercises.find((e) => e.id === exId);
@@ -64,28 +66,11 @@ export const getDefaultDailyTasks = (patient: Patient, exercises?: Exercise[]): 
         });
       }
     });
-  } else {
-    // Fallback bài tập về nhà nếu chưa có danh mục riêng
-    tasks.push({
-      id: 'task_ex_home_1',
-      task: `Bài tập về nhà: Phục hồi chức năng & kéo giãn trị liệu vùng ${bp} (3 hiệp x 10 lần)`,
-      timeOfDay: 'Buổi sáng (08:30)',
-      category: 'Bài tập',
-      isCompleted: false,
-      note: 'Duy trì nhịp thở tự nhiên, tập vừa sức, dừng lại nếu thấy buốt nhói',
-    });
-    tasks.push({
-      id: 'task_ex_home_2',
-      task: `Bài tập về nhà: Tăng cường nhóm cơ sâu & cơ lõi Core vùng ${bp}`,
-      timeOfDay: 'Buổi chiều (17:30)',
-      category: 'Bài tập',
-      isCompleted: false,
-      note: 'Giữ tư thế 5-10 giây mỗi nhịp để ổn định cột sống và khung đỡ khớp',
-    });
   }
 
   // 3. CHẾ ĐỘ ĂN UỐNG & KIỂM SOÁT BIA RƯỢU / NHẬU NHẸT MỖI NGÀY
-  if (habits?.alcoholHeavy || habits?.alcohol || true) {
+  // (Chỉ thêm nếu bệnh nhân có thói quen rượu bia hoặc Bác sĩ chọn phác đồ dinh dưỡng, nếu trống thì bỏ mục này đi)
+  if (habits?.alcoholHeavy || habits?.alcohol) {
     tasks.push({
       id: 'task_alcohol_diet',
       task: 'Kiểm soát ăn uống & nhậu nhẹt: Hạn chế tối đa rượu bia hôm nay, kiêng đồ nhậu cay nóng nhiều dầu mỡ',
@@ -217,7 +202,7 @@ export const PatientDailyChecklist: React.FC<PatientDailyChecklistProps> = ({
             </h3>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Được Bác sĩ chỉ định từ bài tập về nhà, chế độ dinh dưỡng &amp; kiểm soát bia rượu hằng ngày. Bệnh nhân nhấp vào nút stick để đánh dấu việc đã làm.
+            Các mục được tạo tự động 100% từ <strong>chỉ định y khoa của Bác sĩ</strong> (bài tập về nhà, chế độ dinh dưỡng &amp; thói quen phục hồi). Bệnh nhân <strong>chỉ việc tích hoàn thành</strong> từng việc trong ngày để theo dõi tiến độ, không thể tự ý sửa đổi hay thêm bớt.
           </p>
         </div>
 
@@ -245,17 +230,20 @@ export const PatientDailyChecklist: React.FC<PatientDailyChecklistProps> = ({
               }`}
             >
               {/* NÚT STICK (TICK CHECKBOX) TO RÕ RÀNG */}
-              <button
-                type="button"
+              <div
                 className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform active:scale-90 border ${
                   isDone
                     ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-600/30'
-                    : 'bg-white border-slate-300 text-transparent hover:border-blue-500 group-hover:text-slate-300'
+                    : 'bg-white border-slate-300 text-slate-300 hover:border-emerald-500 group-hover:border-emerald-500'
                 }`}
-                title={isDone ? 'Đã hoàn thành - Nhấp để bỏ chọn' : 'Nhấp để tick đã hoàn thành'}
+                title={isDone ? 'Đã hoàn thành - Bấm để bỏ chọn' : 'Bấm để tích đã làm'}
               >
-                <Check className={`w-4 h-4 stroke-[3] ${isDone ? 'text-white' : 'text-slate-300'}`} />
-              </button>
+                {isDone ? (
+                  <Check className="w-4 h-4 text-white stroke-[3]" />
+                ) : (
+                  <Circle className="w-4 h-4 text-slate-300 group-hover:text-emerald-500" />
+                )}
+              </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-2">
@@ -303,12 +291,12 @@ export const PatientDailyChecklist: React.FC<PatientDailyChecklistProps> = ({
               {/* Status Badge */}
               <div className="flex-shrink-0 self-center">
                 {isDone ? (
-                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-full flex items-center space-x-1 border border-emerald-300">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    <span>Đã Stick</span>
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 font-extrabold text-[11px] rounded-full flex items-center space-x-1 border border-emerald-300 shadow-2xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mr-1" />
+                    <span>✓ Đã làm</span>
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 bg-slate-100 text-slate-500 font-medium text-[10px] rounded-full group-hover:bg-blue-100 group-hover:text-blue-700 transition">
+                  <span className="px-2.5 py-1 bg-slate-100 text-slate-500 font-medium text-[10px] rounded-full group-hover:bg-emerald-50 group-hover:text-emerald-700 group-hover:border-emerald-200 border border-transparent transition">
                     Chưa làm
                   </span>
                 )}

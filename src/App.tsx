@@ -100,7 +100,8 @@ import { mergeData } from './utils/importUtils';
 
 export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
   return pts.map((p) => {
-    if (!p.assignedExercises || p.assignedExercises.length === 0) {
+    let assigned = p.assignedExercises;
+    if (!assigned || assigned.length === 0) {
       const bpLower = (p.bodyPart || '').toLowerCase();
       let defaultExIds: string[] = [];
       if (bpLower.includes('cổ') || bpLower.includes('vai') || bpLower.includes('gáy')) {
@@ -110,9 +111,32 @@ export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
       } else {
         defaultExIds = ['EX004', 'EX005', 'EX006'];
       }
-      return { ...p, assignedExercises: defaultExIds };
+      assigned = defaultExIds;
     }
-    return p;
+
+    const initMatch = INITIAL_PATIENTS.find((ip) => ip.id === p.id);
+    const auditLogs = p.auditLogs && p.auditLogs.length > 0 ? p.auditLogs : (initMatch?.auditLogs || []);
+    const modalities = p.modalities && p.modalities.length > 0 ? p.modalities : (initMatch?.modalities || [
+      'Sock wave',
+      'EBS',
+      'TEN',
+      'chiếu đèn cấp dưỡng',
+      'Giãn cơ',
+      'Di cơ',
+      'Tác động cột sống',
+      'chế độ dinh dưỡng',
+      'chế độ tập luyện tại nhà',
+      'Bài tập vận động tại chỗ',
+    ]);
+    const treatmentPlan = p.treatmentPlan || initMatch?.treatmentPlan;
+
+    return {
+      ...p,
+      assignedExercises: assigned,
+      auditLogs,
+      modalities,
+      treatmentPlan,
+    };
   });
 };
 
@@ -1744,6 +1768,7 @@ export default function App() {
           patient={selectedEMRPatient}
           isOpen={!!selectedEMRPatient}
           onClose={() => setSelectedEMRPatient(null)}
+          currentUser={currentUser}
           treatments={treatments}
           exercises={exercises}
           appointments={appointments}

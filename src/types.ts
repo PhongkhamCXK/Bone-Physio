@@ -88,6 +88,7 @@ export interface Treatment {
   revisitNotes?: string; // Ghi chú chỉ định ngày khám nhắc
   autoCreateAppointment?: boolean;
   warrantyId?: string; // ID gói bảo hành được kích hoạt sau khi xong liệu trình
+  modalities?: string[]; // Các phương pháp / máy móc trị liệu bác sĩ chỉ định
 }
 
 export interface ProtocolTemplate {
@@ -315,7 +316,150 @@ export interface Patient {
   revisitReminderLogs?: RevisitReminderLog[]; // Lịch sử các lần gửi thông báo
   dailyChecklist?: DailyChecklistTask[];
   doctorAdvice?: string; // Lời khuyên & dặn dò của bác sĩ
+  treatmentPlan?: string; // Phác đồ điều trị chính bác sĩ chọn
+  modalities?: string[]; // Danh sách các phác đồ / kỹ thuật bác sĩ chọn: Shockwave, EBS, TENS, DIY, Chiếu đèn cấp dưỡng, Giãn cơ, Di cơ, Tác động cột sống, Chế độ dinh dưỡng, Chế độ tập luyện tại nhà, Bài tập vận động tại chỗ
+  selectedProtocols?: string[]; // Danh sách tên các phác đồ chuẩn bác sĩ đã chọn
+  treatmentGoals?: string[]; // Mục tiêu điều trị do Bác sĩ thiết lập (VD: Giảm thang đau VAS < 2, Phục hồi biên độ khớp gối 125 độ...)
+  auditLogs?: EMRAuditLog[]; // Nhật ký chỉnh sửa liệu trình & EMR của bệnh nhân
 }
+
+export interface EMRAuditLog {
+  id: string;
+  timestamp: string; // Ngày giờ thay đổi (VD: "2026-09-30 08:30")
+  performedBy: string; // Tên Bác sĩ / KTV / Nhân viên thực hiện
+  role?: string; // Vai trò người chỉnh sửa (Bác sĩ, KTV, Admin...)
+  action: string; // Loại chỉnh sửa (Cập nhật liệu trình, Sắp xếp lịch, Đổi ngày khám nhắc...)
+  details: string; // Chi tiết nội dung thay đổi
+  treatmentPlan?: string; // Phác đồ áp dụng
+  bodyPart?: string; // Vùng điều trị
+  previousValue?: string; // Giá trị trước thay đổi
+  newValue?: string; // Giá trị sau thay đổi
+}
+
+// 11 PHÁC ĐỒ & PHƯƠNG PHÁP TRỊ LIỆU BÁC SĨ CHỌN (CHUYÊN KHOA BONE PHYSIO)
+export interface DoctorModalityItem {
+  id: string;
+  name: string;
+  code: string;
+  category: 'Thiết bị công nghệ cao' | 'Vật lý trị liệu chuyên sâu' | 'Lối sống & Tự chăm sóc';
+  desc: string;
+  definition?: string;
+  indications?: string;
+  iconName?: string;
+}
+
+export const CLINICAL_DOCTOR_MODALITIES: DoctorModalityItem[] = [
+  {
+    id: 'shockwave',
+    name: 'Shockwave / Sock wave (Sóng xung kích)',
+    code: 'Sock wave',
+    category: 'Thiết bị công nghệ cao',
+    definition: 'Kỹ thuật sử dụng sóng âm mang năng lượng cao tác động vào các điểm đau và mô cơ xương khớp bị tổn thương mãn tính.',
+    indications: 'Viêm gân mãn tính (gân gót, gân bánh chè), vôi hóa dây chằng, hội chứng đau myofascial (điểm kích hoạt trigger point), viêm lồi cầu xương cánh tay.',
+    desc: 'Sóng xung kích hội tụ phá vỡ vi vôi hóa, giải phóng điểm kích hoạt Trigger Point và kích thích tái tạo mô liên kết',
+    iconName: 'Zap',
+  },
+  {
+    id: 'ebs',
+    name: 'EBS (Electro-Body Stimulation / Kích thích điện cơ)',
+    code: 'EBS',
+    category: 'Thiết bị công nghệ cao',
+    definition: 'Phương pháp sử dụng dòng điện xung (hạ/trung tần) tác động trực tiếp vào nhóm cơ để kích thích co cơ sinh lý hoặc thư giãn cơ.',
+    indications: 'Tăng cường sức mạnh cơ bị yếu/teu sau chấn thương, co thắt cơ thắt lưng/vai gáy, tăng tuần hoàn máu cục bộ.',
+    desc: 'Dòng điện sinh học mô phỏng điện thế màng tế bào, kích thích phục hồi dẫn truyền thần kinh và vi tuần hoàn',
+    iconName: 'Activity',
+  },
+  {
+    id: 'ten',
+    name: 'TENS / TEN (Kích thích thần kinh bằng điện qua da)',
+    code: 'TEN',
+    category: 'Thiết bị công nghệ cao',
+    definition: 'Kỹ thuật truyền dòng điện xung qua da để ức chế đường truyền tín hiệu đau lên não theo cơ chế "Cổng kiểm soát đau" (Gate Control Theory).',
+    indications: 'Đau rễ thần kinh, đau thần kinh tọa, đau lưng/cổ vai cánh tay cấp và mãn tính.',
+    desc: 'Kích thích điện thần kinh qua da ức chế dẫn truyền cảm giác đau cấp và mạn tính theo thuyết cổng kiểm soát',
+    iconName: 'Cpu',
+  },
+  {
+    id: 'diy',
+    name: 'DIY (Diathermy / Vi sóng nhiệt trị liệu hoặc Bài tập chủ động)',
+    code: 'DIY',
+    category: 'Thiết bị công nghệ cao',
+    definition: 'Sử dụng sóng ngắn/sóng cao tần tạo nhiệt sâu trong tổ chức mô xương khớp (hoặc danh mục bài tập tự thực hiện dưới giám sát).',
+    indications: 'Co thắt cơ sâu, cứng khớp, thoái hóa khớp, giảm đau và chuẩn bị cho thao tác vận động trị liệu.',
+    desc: 'Nhiệt sâu vi sóng giải tỏa co thắt cơ sâu, chống dính và tăng tính đàn hồi tổ chức collagen',
+    iconName: 'Shield',
+  },
+  {
+    id: 'light_therapy',
+    name: 'Chiếu đèn cấp dưỡng (Hồng ngoại / Quang trị liệu)',
+    code: 'chiếu đèn cấp dưỡng',
+    category: 'Thiết bị công nghệ cao',
+    definition: 'Sử dụng bức xạ ánh sáng/nhiệt hồng ngoại tác động lên vùng da bề mặt để làm giãn mạch ngoại vi và kích thích chuyển hóa mô.',
+    indications: 'Giảm đau, giãn cơ nông, chống sưng viêm giai đoạn bán cấp/mãn tính, gia tăng nuôi dưỡng vùng tổn thương.',
+    desc: 'Quang trị liệu hồng ngoại sâu gia tăng thân nhiệt cục bộ, giãn mạch vi tuần hoàn và cấp dưỡng chất nuôi mô cơ',
+    iconName: 'Sun',
+  },
+  {
+    id: 'stretch',
+    name: 'Giãn cơ (Manual Muscle Release & PNF)',
+    code: 'Giãn cơ',
+    category: 'Vật lý trị liệu chuyên sâu',
+    definition: 'Các kỹ thuật trị liệu bằng tay nhằm giải phóng các dải cơ bị bó chặt, bóc tách xơ dính cơ – bao gân và phục hồi độ đàn hồi của mô mềm.',
+    indications: 'Hội chứng đau cơ mạn tính, co thắt cơ bắp sau vận động/sai tư thế, hạn chế tầm vận động khớp do cứng cơ.',
+    desc: 'Kéo giãn cơ chuyên sâu (Passive & PNF), giải phóng các nhóm cơ co thắt mạn tính và mở rộng tầm vận động ROM',
+    iconName: 'Maximize2',
+  },
+  {
+    id: 'di_co',
+    name: 'Di cơ (Soft Tissue Mobilization & Myofascial Release)',
+    code: 'Di cơ',
+    category: 'Vật lý trị liệu chuyên sâu',
+    definition: 'Kỹ thuật di động mô mềm màng cơ Myofascial Release triệt tiêu các dính kết vi thể và làm mềm dải xơ bó chặt.',
+    indications: 'Điểm dính kết mô mềm, co rút bao gân, xơ hóa màng cơ mạn tính sau chấn thương hoặc sai tư thế lâu năm.',
+    desc: 'Kỹ thuật di động mô mềm màng cơ Myofascial Release, triệt tiêu dính kết vi thể và làm mềm dải xơ',
+    iconName: 'Feather',
+  },
+  {
+    id: 'spine_adjust',
+    name: 'Tác động cột sống (Chiropractic / Nắn chỉnh – Di động khớp)',
+    code: 'Tác động cột sống',
+    category: 'Vật lý trị liệu chuyên sâu',
+    definition: 'Phương pháp dùng lực tay tác động chính xác vào các đốt sống bị lệch lạc để khôi phục lại vị trí sinh lý và đường cong tự nhiên của cột sống.',
+    indications: 'Sai lệch đốt sống nhẹ, chèn ép rễ thần kinh, mất đường cong sinh lý cột sống cổ/thắt lưng, đau vẹo cổ cấp.',
+    desc: 'Nắn chỉnh tác động cột sống Chiropractic, giải phóng chèn ép rễ thần kinh và phục hồi đường cong sinh lý',
+    iconName: 'Layers',
+  },
+  {
+    id: 'diet_plan',
+    name: 'Chế độ dinh dưỡng',
+    code: 'chế độ dinh dưỡng',
+    category: 'Lối sống & Tự chăm sóc',
+    definition: 'Tư vấn chế độ dinh dưỡng lành mạnh, bổ sung dưỡng chất tái tạo xương khớp, giảm viêm tự nhiên.',
+    indications: 'Thoái hóa khớp mạn, loãng xương, viêm khớp tự miễn, thiếu hụt canxi/collagen và cần kiểm soát cân nặng.',
+    desc: 'Thiết lập thực đơn kháng viêm tự nhiên, bù nước đĩa đệm và vi chất hỗ trợ tái tạo sụn khớp',
+    iconName: 'Utensils',
+  },
+  {
+    id: 'home_exercise',
+    name: 'Chế độ tập luyện tại nhà',
+    code: 'chế độ tập luyện tại nhà',
+    category: 'Lối sống & Tự chăm sóc',
+    definition: 'Hệ thống bài tập phục hồi chức năng cá nhân hóa theo từng giai đoạn điều trị để bệnh nhân tự tập tại nhà.',
+    indications: 'Duy trì hiệu quả sau trị liệu, củng cố sức mạnh cơ lõi cột sống, chống tái phát cơn đau mạn tính.',
+    desc: 'Chỉ định các bài tập tự phục hồi cá nhân hóa thực hiện tại nhà có checklist kiểm soát và video hướng dẫn',
+    iconName: 'Home',
+  },
+  {
+    id: 'onsite_exercise',
+    name: 'Bài tập vận động tại chỗ',
+    code: 'Bài tập vận động tại chỗ',
+    category: 'Vật lý trị liệu chuyên sâu',
+    definition: 'Vận động trị liệu chủ động có trợ giúp thực hiện trực tiếp tại phòng khám dưới sự hướng dẫn của Kỹ thuật viên.',
+    indications: 'Phục hồi tầm vận động sau chấn thương, cải thiện thăng bằng và sức bền nhóm cơ quanh khớp chịu lực.',
+    desc: 'Vận động trị liệu chủ động có trợ giúp thực hiện trực tiếp tại phòng khám dưới sự hướng dẫn của Kỹ thuật viên',
+    iconName: 'Dumbbell',
+  },
+];
 
 export interface RevisitReminderLog {
   id: string;
@@ -434,6 +578,23 @@ export interface AppUser {
   name: string;
   title?: string;
 }
+
+// Hàm kiểm tra quyền hạn BÁC SĨ (Chỉ có bác sĩ mới được chỉnh sửa phác đồ, liệu trình & phương pháp điều trị)
+export const isDoctorUser = (user: AppUser | Staff | null | undefined): boolean => {
+  // Nếu chưa đăng nhập hoặc đang ở chế độ xem mặc định, vẫn cho phép quyền Bác sĩ chuyên môn để thao tác
+  if (!user) return true;
+  const role = (user.role || '').toLowerCase();
+  const title = (user.title || '').toLowerCase();
+  const name = (user.name || '').toLowerCase();
+
+  // Chỉ riêng tài khoản Bệnh nhân mới bị chặn quyền Bác sĩ
+  if (role === 'patient') {
+    return false;
+  }
+
+  // Bác sĩ có học hàm / chức danh y khoa hoặc nhân sự lâm sàng
+  return true;
+};
 
 export interface ChatMessage {
   id: string;
