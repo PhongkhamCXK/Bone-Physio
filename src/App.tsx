@@ -53,6 +53,7 @@ import { MasterDataPoolTab } from './components/MasterDataPoolTab';
 import { EMRDetailModal } from './components/EMRDetailModal';
 import { LoginModal, LoginPage } from './components/LoginModal';
 import { CheckInOutModal } from './components/CheckInOutModal';
+import { KPISimulatorModal } from './components/KPISimulatorModal';
 import { ImportModal } from './components/ImportModal';
 import { UpcomingAppointmentToast } from './components/UpcomingAppointmentToast';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
@@ -278,6 +279,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedEMRPatient, setSelectedEMRPatient] = useState<Patient | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isKPISimulatorOpen, setIsKPISimulatorOpen] = useState(false);
   const [isCheckInOutModalOpen, setIsCheckInOutModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
@@ -1451,8 +1453,9 @@ export default function App() {
   }
 
   // Current Patient for Patient Portal
+  const [selectedPortalPatientId, setSelectedPortalPatientId] = useState<string>('');
   const activePortalPatient =
-    patients.find((p) => p.id === currentUser.id) || patients[0];
+    patients.find((p) => p.id === (selectedPortalPatientId || currentUser.id)) || patients[0];
 
   return (
     <div className="min-h-screen bg-slate-100 flex text-slate-900 font-sans antialiased">
@@ -1464,6 +1467,7 @@ export default function App() {
         onLogout={handleLogout}
         isOpen={isSidebarOpen}
         onCloseMobile={() => setIsSidebarOpen(false)}
+        onOpenKPISimulator={() => setIsKPISimulatorOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -1523,7 +1527,9 @@ export default function App() {
                 treatments={treatments}
                 appointments={appointments}
                 invoices={invoices}
+                expenses={expenses}
                 onNavigateTab={setActiveTab}
+                onOpenKPISimulator={() => setIsKPISimulatorOpen(true)}
                 onExportDualFiles={handleExportDual}
                 onOpenImport={() => setIsImportModalOpen(true)}
                 onOpenEMR={(p) => setSelectedEMRPatient(p)}
@@ -1541,6 +1547,7 @@ export default function App() {
                 treatments={treatments}
                 warranties={warranties}
                 invoices={invoices}
+                exercises={exercises}
                 onAddPatient={handleAddPatient}
                 onUpdatePatient={handleUpdatePatient}
                 onDeletePatient={handleDeletePatient}
@@ -1712,6 +1719,7 @@ export default function App() {
             )}
 
             {(activeTab === 'patient-portal' ||
+              activeTab === 'patient-checklist' ||
               activeTab === 'patient-exercises' ||
               activeTab === 'patient-warranty') &&
               activePortalPatient && (
@@ -1722,8 +1730,13 @@ export default function App() {
                   invoices={invoices}
                   exercises={exercises}
                   warranties={warranties}
+                  allPatients={patients}
+                  onSelectPatient={(p) => setSelectedPortalPatientId(p.id)}
+                  onOpenEMR={(p) => setSelectedEMRPatient(p)}
                   initialTab={
-                    activeTab === 'patient-warranty'
+                    activeTab === 'patient-checklist'
+                      ? 'checklist'
+                      : activeTab === 'patient-warranty'
                       ? 'warranty'
                       : activeTab === 'patient-exercises'
                       ? 'exercises'
@@ -1735,6 +1748,8 @@ export default function App() {
                         ? 'patient-warranty'
                         : tab === 'exercises'
                         ? 'patient-exercises'
+                        : tab === 'checklist'
+                        ? 'patient-checklist'
                         : 'patient-portal'
                     )
                   }
@@ -1792,8 +1807,24 @@ export default function App() {
             setSelectedEMRPatient(null);
             setActiveTab('treatments');
           }}
+          onOpenPatientPortal={(p) => {
+            setSelectedPortalPatientId(p.id);
+            setSelectedEMRPatient(null);
+            setActiveTab('patient-checklist');
+          }}
         />
       )}
+
+      {/* Centralized KPI Simulator Modal */}
+      <KPISimulatorModal
+        isOpen={isKPISimulatorOpen}
+        onClose={() => setIsKPISimulatorOpen(false)}
+        patients={patients}
+        treatments={treatments}
+        invoices={invoices}
+        expenses={expenses}
+        taxConfig={taxConfig}
+      />
 
       {/* Centralized Check-in / Check-out Reception & Attendance Modal */}
       <CheckInOutModal

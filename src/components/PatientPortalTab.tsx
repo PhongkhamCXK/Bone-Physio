@@ -14,6 +14,8 @@ import { INITIAL_CHAT_CONVERSATIONS } from '../data/chatSeedData';
 import {
   FileText,
   Activity,
+  PieChart,
+  Users,
   Target,
   Calendar,
   Layers,
@@ -22,6 +24,9 @@ import {
   Utensils,
   Sparkles,
   CheckCircle2,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   BookOpen,
   MessageSquare,
   Send,
@@ -46,7 +51,8 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { PatientAvatar, AGE_CATEGORY_MAP, getCategoryByAge, ALL_AVATAR_PRESETS } from './PatientAvatar';
-import { PatientDailyChecklist, getDefaultDailyTasks } from './PatientDailyChecklist';
+import { getDefaultDailyTasks } from './PatientDailyChecklist';
+import { PatientWeekChecklist } from './PatientWeekChecklist';
 
 interface PatientPortalTabProps {
   patient: Patient;
@@ -55,11 +61,14 @@ interface PatientPortalTabProps {
   invoices: Invoice[];
   exercises: Exercise[];
   warranties?: WarrantyRecord[];
+  allPatients?: Patient[];
+  onSelectPatient?: (p: Patient) => void;
   initialTab?: 'overview' | 'exercises' | 'warranty' | 'checklist';
   onSwitchTab?: (tab: 'overview' | 'exercises' | 'warranty' | 'checklist') => void;
   onRequestMaintenanceAppt?: (patientName: string, service: string, date: string) => void;
   onUpdatePatient?: (updated: Patient) => void;
   onUpdateTreatment?: (updated: Treatment) => void;
+  onOpenEMR?: (patient: Patient) => void;
 }
 
 const CHAT_STORAGE_KEY = 'bone_physio_chat_conversations';
@@ -71,15 +80,39 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   invoices,
   exercises,
   warranties = [],
+  allPatients = [],
+  onSelectPatient,
   initialTab = 'overview',
   onSwitchTab,
   onRequestMaintenanceAppt,
   onUpdatePatient,
   onUpdateTreatment,
+  onOpenEMR,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'exercises' | 'warranty' | 'checklist'>(initialTab);
   const [patientData, setPatientData] = useState<Patient>(patient);
   const [showAvatarPickerModal, setShowAvatarPickerModal] = useState(false);
+  const [emrSectionsOpen, setEmrSectionsOpen] = useState({
+    baseline: true,
+    tracking: true,
+    sessions: true,
+  });
+
+  const scrollToEMR = (smooth = true) => {
+    setActiveSubTab("overview");
+    if (onSwitchTab) onSwitchTab("overview");
+    setTimeout(() => {
+      const el = document.getElementById("patient-emr-section");
+      if (el) {
+        el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+        const mainEl = document.querySelector("main");
+        if (mainEl) {
+          const topOffset = el.getBoundingClientRect().top - mainEl.getBoundingClientRect().top + mainEl.scrollTop - 24;
+          mainEl.scrollTo({ top: Math.max(0, topOffset), behavior: smooth ? "smooth" : "auto" });
+        }
+      }
+    }, 60);
+  };
 
   useEffect(() => {
     setPatientData(patient);
@@ -90,11 +123,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
     getDefaultDailyTasks(patientData, exercises).length > 0
   );
 
-  useEffect(() => {
-    if (!hasDailyChecklist && activeSubTab === 'checklist') {
-      setActiveSubTab('overview');
-    }
-  }, [hasDailyChecklist, activeSubTab]);
+  // Checklist tab is always enabled with PatientWeekChecklist
 
   const handleToggleChecklistTask = (taskId: string) => {
     const currentTasks =
@@ -455,6 +484,44 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
 
     return (
       <div className="space-y-6">
+        {/* CHỌN BỆNH NHÂN ĐỂ XEM CỬA SỔ (DÀNH CHO BÁC SĨ / QUẢN LÝ / XEM THỬ) */}
+        {allPatients && allPatients.length > 1 && (
+          <div className="bg-gradient-to-r from-blue-900/90 to-indigo-900/90 border border-blue-700/60 p-3 sm:p-4 rounded-3xl text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+                <Users className="w-4 h-4" />
+              </span>
+              <div>
+                <span className="font-extrabold text-xs sm:text-sm block">
+                  Chế Độ Bác Sĩ &amp; Quản Lý: Chọn Bệnh Nhân Xem Cửa Sổ Phục Hồi
+                </span>
+                <span className="text-[11px] text-blue-200 block">
+                  Đang xem cửa sổ của: <strong className="text-white font-bold">{patientData.name}</strong> • Chẩn đoán: {patientData.diagnosis}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-stretch sm:self-auto">
+              <select
+                value={patientData.id}
+                onChange={(e) => {
+                  const target = allPatients.find((p) => p.id === e.target.value);
+                  if (target) {
+                    setPatientData(target);
+                    if (onSelectPatient) onSelectPatient(target);
+                  }
+                }}
+                className="bg-slate-900 border border-blue-400/60 text-white rounded-2xl px-3.5 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-400 focus:outline-none cursor-pointer w-full sm:w-auto shadow-inner"
+              >
+                {allPatients.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} - {p.bodyPart || p.diagnosis} ({p.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Welcome banner */}
         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4 sm:gap-5">
@@ -510,9 +577,16 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-xs font-semibold uppercase tracking-wider text-blue-100">
-                  Cổng Tra Cứu EMR & Hướng Dẫn Tự Tập Tại Nhà
-                </span>
+                <button
+                  type="button"
+                  onClick={() => scrollToEMR()}
+                  className="px-3 py-1 bg-white/15 hover:bg-white/25 cursor-pointer backdrop-blur-md rounded-full text-xs font-semibold uppercase tracking-wider text-blue-100 flex items-center gap-1.5 transition active:scale-95"
+                  title="Bấm để kéo/cuộn xuống xem Hồ Sơ EMR"
+                >
+                  <FileText className="w-3.5 h-3.5 text-blue-200" />
+                  <span>Cổng Tra Cứu EMR & Hướng Dẫn Tự Tập Tại Nhà</span>
+                  <span className="text-[11px] font-bold">↓</span>
+                </button>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400/25 border border-amber-300/40 text-amber-200">
                   {categoryInfo.badgeEmoji} {categoryInfo.categoryTitle} ({categoryInfo.ageGroup})
                 </span>
@@ -533,6 +607,20 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 text-center min-w-[120px]">
               <span className="text-xs text-blue-100">Tiến độ liệu trình</span>
               <h3 className="text-2xl sm:text-3xl font-black mt-0.5">{progressPercent}%</h3>
+            </div>
+            <div
+              onClick={() => scrollToEMR()}
+              className="bg-blue-500/25 hover:bg-blue-500/35 cursor-pointer backdrop-blur-md p-4 rounded-2xl border border-blue-300/40 text-center min-w-[125px] transition group shadow-xs active:scale-95"
+              title="Bấm để kéo/cuộn xuống xem Bệnh Án Điện Tử EMR"
+            >
+              <span className="text-xs text-blue-200 flex items-center justify-center space-x-1 font-bold group-hover:text-white">
+                <FileText className="w-3.5 h-3.5" />
+                <span>Hồ Sơ EMR</span>
+              </span>
+              <h3 className="text-xs sm:text-sm font-black text-white mt-1.5 flex items-center justify-center gap-1">
+                <span>Xem EMR</span>
+                <span className="text-blue-200 group-hover:translate-y-0.5 transition-transform font-bold">↓</span>
+              </h3>
             </div>
             <div
               onClick={() => {
@@ -591,40 +679,35 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
 
         {/* Primary Navigation Switcher */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
-          {hasDailyChecklist && (
-            <button
-              type="button"
-              onClick={() => {
-                setActiveSubTab('checklist');
-                if (onSwitchTab) onSwitchTab('checklist');
-              }}
-              className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
-                activeSubTab === 'checklist'
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <ListTodo className="w-4 h-4" />
-              <span>Kế Hoạch & Việc Cần Làm</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                  activeSubTab === 'checklist'
-                    ? 'bg-white text-orange-700'
-                    : 'bg-amber-100 text-amber-900'
-                }`}
-              >
-                {completedChecklistCount}/{totalChecklistCount}
-              </span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => {
-              setActiveSubTab('overview');
-              if (onSwitchTab) onSwitchTab('overview');
+              setActiveSubTab('checklist');
+              if (onSwitchTab) onSwitchTab('checklist');
             }}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
+              activeSubTab === 'checklist'
+                ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-600/30'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <PieChart className="w-4 h-4 text-emerald-400" />
+            <span>Kế Hoạch Liệu Trình &amp; Donut Chăm Chỉ</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeSubTab === 'checklist'
+                  ? 'bg-white text-emerald-800'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}
+            >
+              Xem theo tuần/thứ &amp; stick
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollToEMR()}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition cursor-pointer ${
               activeSubTab === 'overview'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
                 : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -632,6 +715,15 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
           >
             <FileText className="w-4 h-4" />
             <span>Hồ Sơ EMR & Liệu Trình</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeSubTab === 'overview'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-blue-100 text-blue-700'
+              }`}
+            >
+              Kéo xem ↓
+            </span>
           </button>
 
           <button
@@ -686,27 +778,80 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
           </button>
         </div>
 
-      {/* VIEW 1: OVERVIEW TAB */}
+      {/* VIEW 1: OVERVIEW TAB (HỒ SƠ BỆNH ÁN EMR & TIẾN TRÌNH) */}
       {activeSubTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Mục Việc Cần Làm Hôm Nay & Lời Nhắc Đầu Ngày */}
-          {hasDailyChecklist && (
-            <PatientDailyChecklist
-              patient={patientData}
-              exercises={exercises}
-              onToggleTask={handleToggleChecklistTask}
-            />
-          )}
+        <div id="patient-emr-section" className="space-y-6 scroll-mt-6 animate-in fade-in duration-300">
+          {/* Quick Notice to Switch to 6-Week Checklist if needed */}
+          <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200/80 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+            <div className="flex items-center space-x-2.5">
+              <span className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs flex-shrink-0">
+                <PieChart className="w-4 h-4" />
+              </span>
+              <div>
+                <span className="font-bold text-slate-900 block">
+                  Đang xem: Hồ sơ Bệnh Án Điện Tử EMR &amp; Tiến trình Lâm sàng
+                </span>
+                <p className="text-slate-600 text-[11px] mt-0.5">
+                  Lộ trình 21 buổi (6 tuần) với thực đơn ăn uống và bài tập hàng ngày đã được tách vào mục riêng <strong>&quot;Kế Hoạch Liệu Trình &amp; Donut Chăm Chỉ&quot;</strong>.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSubTab('checklist');
+                if (onSwitchTab) onSwitchTab('checklist');
+              }}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs transition flex items-center space-x-1.5 shadow-xs whitespace-nowrap self-start sm:self-auto cursor-pointer"
+            >
+              <PieChart className="w-3.5 h-3.5" />
+              <span>Mở Kế Hoạch 6 Tuần &amp; Donut</span>
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column: EMR Detail & Progression & Treatments */}
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm lg:col-span-2 space-y-6">
             {/* Diagnostic overview */}
             <div className="space-y-3">
-              <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                <span>Bệnh Án Điện Tử EMR Cá Nhân</span>
-              </h3>
+              <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <span>Bệnh Án Điện Tử EMR Cá Nhân</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                    Khóa An Toàn 🔒
+                  </span>
+                </h3>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  {onOpenEMR && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenEMR(patientData)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-xs active:scale-95"
+                      title="Mở toàn bộ hồ sơ bệnh án EMR (Toàn màn hình)"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Xem EMR Toàn Màn Hình</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allOpen = emrSectionsOpen.baseline && emrSectionsOpen.tracking && emrSectionsOpen.sessions;
+                      setEmrSectionsOpen({
+                        baseline: !allOpen,
+                        tracking: !allOpen,
+                        sessions: !allOpen,
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center space-x-1 transition cursor-pointer"
+                    title="Kéo xuống xem hết hoặc thu gọn"
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${emrSectionsOpen.baseline && emrSectionsOpen.tracking && emrSectionsOpen.sessions ? "rotate-180" : ""}`} />
+                    <span>{emrSectionsOpen.baseline && emrSectionsOpen.tracking && emrSectionsOpen.sessions ? "Thu gọn EMR" : "Kéo xuống xem hết (Mở rộng)"}</span>
+                  </button>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
@@ -910,6 +1055,26 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
             )}
 
 
+            {/* CÁC CHỈ SỐ LÂM SÀNG BAN ĐẦU & MỤC TIÊU */}
+            <div className="space-y-4">
+              <div
+                onClick={() => setEmrSectionsOpen(prev => ({ ...prev, baseline: !prev.baseline }))}
+                className="flex items-center justify-between cursor-pointer select-none py-2.5 px-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200/80 transition"
+              >
+                <div className="flex items-center space-x-2">
+                  <HeartPulse className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Mục Tiêu &amp; Chỉ Số Khám Lâm Sàng Ban Đầu ({effectiveMetrics[0]?.painScore || 7}/10 VAS, {effectiveMetrics[0]?.rangeOfMotion || "ROM"})
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-500">
+                  <span>{emrSectionsOpen.baseline ? "Thu gọn" : "Kéo xuống xem"}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${emrSectionsOpen.baseline ? "rotate-180" : ""}`} />
+                </div>
+              </div>
+
+              {emrSectionsOpen.baseline && (
+                <div className="space-y-4">
             {/* MỤC TIÊU ĐIỀU TRỊ BỆNH DO BÁC SĨ THIẾT LẬP (BỆNH NHÂN THEO DÕI) */}
             <div className="bg-gradient-to-br from-emerald-50/90 via-teal-50/50 to-white p-5 rounded-3xl border border-emerald-200 shadow-sm space-y-3.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-100 pb-3">
@@ -1072,12 +1237,30 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               )}
             </div>
 
+                </div>
+              )}
+            </div>
+
             {/* Health metrics table */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                <Activity className="w-4 h-4 text-blue-600" />
-                <span>Bảng Theo Dõi Các Chỉ Số Lâm Sàng &amp; Tiến Triển Hồi Phục</span>
-              </h4>
+              <div
+                onClick={() => setEmrSectionsOpen(prev => ({ ...prev, tracking: !prev.tracking }))}
+                className="flex items-center justify-between cursor-pointer select-none py-2.5 px-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200/80 transition"
+              >
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Bảng Theo Dõi Các Chỉ Số Lâm Sàng &amp; Tiến Triển Hồi Phục ({effectiveMetrics.length} mốc đánh giá)
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-500">
+                  <span>{emrSectionsOpen.tracking ? "Thu gọn" : "Kéo xuống xem"}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${emrSectionsOpen.tracking ? "rotate-180" : ""}`} />
+                </div>
+              </div>
+
+              {emrSectionsOpen.tracking && (
+                <div className="space-y-3">
 
               {/* Stat Comparison Cards */}
               {effectiveMetrics.length > 0 && (
@@ -1200,19 +1383,29 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               </div>
             </div>
 
+              )}
+            </div>
+
             {/* Treatments Progress & Full Schedule with Doctor and Results */}
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                    <Layers className="w-4 h-4 text-blue-600" />
-                    <span>Toàn Bộ Lịch Trình Điều Trị &amp; Xác Nhận Làm Dịch Vụ</span>
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    Bệnh nhân xem toàn bộ danh sách các buổi điều trị, bác sĩ/KTV phụ trách, kết quả tiến triển và nút xác nhận đã tập
-                  </p>
+              <div
+                onClick={() => setEmrSectionsOpen(prev => ({ ...prev, sessions: !prev.sessions }))}
+                className="flex items-center justify-between cursor-pointer select-none py-2.5 px-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200/80 transition"
+              >
+                <div className="flex items-center space-x-2">
+                  <Layers className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Toàn Bộ Lịch Trình Điều Trị &amp; Xác Nhận Làm Dịch Vụ ({patientTreatments.reduce((acc, t) => acc + (t.total || 10), 0)} buổi)
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-500">
+                  <span>{emrSectionsOpen.sessions ? "Thu gọn" : "Kéo xuống xem"}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${emrSectionsOpen.sessions ? "rotate-180" : ""}`} />
                 </div>
               </div>
+
+              {emrSectionsOpen.sessions && (
+                <div className="space-y-4">
 
               <div className="space-y-4">
                 {patientTreatments.map((t) => {
@@ -1387,6 +1580,9 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                   );
                 })}
               </div>
+            </div>
+
+              )}
             </div>
 
             {/* HIGHLIGHT: Assigned Home Exercises Quick View (Chỉ hiển thị nếu có bài tập được gán, nếu trống thì bỏ đi) */}
@@ -2237,13 +2433,21 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
         </div>
       )}
 
-      {/* VIEW 4: DAILY CHECKLIST & ACTION PLAN */}
-      {activeSubTab === 'checklist' && hasDailyChecklist && (
+      {/* VIEW 4: WEEK CHECKLIST & DONUT DILIGENCE / COMPLIANCE CHART */}
+      {activeSubTab === 'checklist' && (
         <div className="space-y-6">
-          <PatientDailyChecklist
+          <PatientWeekChecklist
             patient={patientData}
-            onToggleTask={handleToggleChecklistTask}
+            treatments={treatments}
+            exercises={exercises}
+            onUpdatePatient={onUpdatePatient}
+            onOpenExercisesTab={() => {
+              setActiveSubTab('exercises');
+              if (onSwitchTab) onSwitchTab('exercises');
+            }}
           />
+
+
         </div>
       )}
 

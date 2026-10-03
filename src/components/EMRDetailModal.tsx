@@ -15,6 +15,7 @@ import {
 import { AddRegionModal } from './AddRegionModal';
 import { RevisitReminderConfirmationModal } from './dashboard/RevisitReminderConfirmationModal';
 import { ClinicalEMRFormModal } from './ClinicalEMRFormModal';
+import { DoctorPrescriptionModal } from './DoctorPrescriptionModal';
 import { ConfirmDeletePatientModal } from './ConfirmDeletePatientModal';
 import { ScheduleTreatmentModal } from './ScheduleTreatmentModal';
 import { DoctorPrescribedProtocolsSection } from './DoctorPrescribedProtocolsSection';
@@ -26,6 +27,7 @@ import {
   Printer,
   Plus,
   Activity,
+  PieChart,
   HeartPulse,
   Calendar,
   Layers,
@@ -69,6 +71,7 @@ interface EMRDetailModalProps {
   onUpdatePatient: (updated: Patient) => void;
   onUpdateTreatment?: (updated: Treatment) => void;
   onNavigateToTreatments?: () => void;
+  onOpenPatientPortal?: (patient: Patient) => void;
 }
 
 export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
@@ -86,6 +89,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   onUpdatePatient,
   onUpdateTreatment,
   onNavigateToTreatments,
+  onOpenPatientPortal,
 }) => {
   const isDoctor = isDoctorUser(currentUser);
   const [isAddRegionOpen, setIsAddRegionOpen] = useState(false);
@@ -120,6 +124,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   const [isRevisitSaved, setIsRevisitSaved] = useState(false);
   const [isSendReminderOpen, setIsSendReminderOpen] = useState(false);
   const [isEditEMROpen, setIsEditEMROpen] = useState(false);
+  const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
 
   React.useEffect(() => {
     if (patient) {
@@ -277,6 +282,28 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
                   <Lock className="w-3.5 h-3.5" />
                   <span>Chỉ Bác Sĩ Mới Được Sửa EMR</span>
                 </span>
+              )}
+              {onOpenPatientPortal && (
+                <button
+                  type="button"
+                  onClick={() => onOpenPatientPortal(patient)}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                  title="Mở giao diện mà bệnh nhân nhìn thấy: Thực đơn, Bài tập, Donut Chart đếm % chăm chỉ"
+                >
+                  <PieChart className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>Cửa Sổ Bệnh Nhân (Donut Chart)</span>
+                </button>
+              )}
+              {isDoctor && (
+                <button
+                  type="button"
+                  onClick={() => setIsPrescriptionModalOpen(true)}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                  title="Bác sĩ chỉ định bài tập về nhà và thực đơn ăn uống cho bệnh nhân"
+                >
+                  <Stethoscope className="w-3.5 h-3.5 text-indigo-200" />
+                  <span>Chỉ Định Bài Tập &amp; Thực Đơn</span>
+                </button>
               )}
               {onDeletePatient && (
                 <button

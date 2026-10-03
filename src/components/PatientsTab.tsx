@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Patient, Appointment, Treatment, WarrantyRecord, Invoice } from '../types';
+import { Patient, Appointment, Treatment, WarrantyRecord, Invoice, Exercise } from '../types';
+import { DoctorPrescriptionModal } from './DoctorPrescriptionModal';
 import {
   UserPlus,
   Search,
@@ -27,6 +28,7 @@ interface PatientsTabProps {
   treatments?: Treatment[];
   warranties?: WarrantyRecord[];
   invoices?: Invoice[];
+  exercises?: Exercise[];
   onAddPatient: (patient: Patient) => void;
   onUpdatePatient: (patient: Patient) => void;
   onDeletePatient: (id: string, deleteRelatedData?: boolean) => void;
@@ -40,6 +42,7 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
   treatments = [],
   warranties = [],
   invoices = [],
+  exercises = [],
   onAddPatient,
   onUpdatePatient,
   onDeletePatient,
@@ -50,6 +53,8 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
   const [isEMRModalOpen, setIsEMRModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
+  const [prescriptionPatient, setPrescriptionPatient] = useState<Patient | null>(null);
+  const [isFirstVisitReminder, setIsFirstVisitReminder] = useState<boolean>(false);
 
   const handleOpenAdd = () => {
     setEditingPatient(null);
@@ -68,6 +73,10 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
       onAddPatient(savedPatient);
     }
     setIsEMRModalOpen(false);
+
+    // LỜI NHẮC BÁC SĨ: Với mỗi hồ sơ được tạo / sau khi đóng kết thúc lần khám đầu, luôn chỉ định bài tập & thực đơn ăn
+    setPrescriptionPatient(savedPatient);
+    setIsFirstVisitReminder(true);
   };
 
   const filtered = patients.filter((p) => {
@@ -270,6 +279,21 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
               </div>
 
               <div className="pt-3 border-t border-slate-100 space-y-2">
+                {/* Nút chỉ định bài tập & thực đơn của bác sĩ */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPrescriptionPatient(p);
+                    setIsFirstVisitReminder(false);
+                  }}
+                  className="w-full py-1.5 px-2 bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100 text-indigo-700 border border-indigo-200 rounded-xl text-[11px] font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                  title="Chỉ định bài tập về nhà và thực đơn ăn uống cho bệnh nhân"
+                >
+                  <Stethoscope className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>🩺 Chỉ Định Bài Tập &amp; Thực Đơn</span>
+                </button>
+
                 {/* Actions: View EMR & Edit EMR */}
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -318,6 +342,21 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
           );
         })}
       </div>
+
+      {/* Modal Lời Nhắc Bác Sĩ Chỉ Định Bài Tập & Thực Đơn */}
+      {prescriptionPatient && (
+        <DoctorPrescriptionModal
+          isOpen={!!prescriptionPatient}
+          onClose={() => setPrescriptionPatient(null)}
+          patient={prescriptionPatient}
+          exercises={exercises}
+          onSavePrescription={(updated) => {
+            onUpdatePatient(updated);
+            setPrescriptionPatient(null);
+          }}
+          isFirstVisitReminder={isFirstVisitReminder}
+        />
+      )}
 
       {/* Clinical EMR Form Modal (Chuẩn Y Khoa 5 Phân Hệ) */}
       <ClinicalEMRFormModal

@@ -11,7 +11,7 @@ import {
   ComposedChart
 } from "recharts";
 import React, { useState, useEffect, useMemo } from 'react';
-import { Patient, Treatment, Appointment, Invoice, SessionSchedule } from '../types';
+import { Patient, Treatment, Appointment, Invoice, Expense, SessionSchedule } from '../types';
 import { RevisitPatientsWidget } from './dashboard/RevisitPatientsWidget';
 import {
   getPatientsDueForRevisitInNext3Days,
@@ -48,6 +48,7 @@ interface DashboardTabProps {
   treatments: Treatment[];
   appointments: Appointment[];
   invoices: Invoice[];
+  expenses?: Expense[];
   onNavigateTab: (tabId: string) => void;
   onExportDualFiles: () => void;
   onOpenImport?: () => void;
@@ -56,6 +57,7 @@ interface DashboardTabProps {
   onAddPatient?: (patient: Patient) => void;
   onShowToast?: (message: string) => void;
   onOpenMismatchModal?: () => void;
+  onOpenKPISimulator?: () => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -63,6 +65,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   treatments,
   appointments,
   invoices,
+  expenses = [],
   onNavigateTab,
   onExportDualFiles,
   onOpenImport,
@@ -71,6 +74,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onAddPatient,
   onShowToast,
   onOpenMismatchModal,
+  onOpenKPISimulator,
 }) => {
   const [isBulkOverdueModalOpen, setIsBulkOverdueModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -235,8 +239,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     window.print();
   };
 
-  // Chuyển đổi chế độ biểu đồ xu hướng trong tuần: Doanh thu hoặc Bệnh nhân mới / Lượt khám
-  const [chartMetricMode, setChartMetricMode] = useState<"both" | "revenue" | "patients">("both");
+  // Chuyển đổi chế độ biểu đồ xu hướng trong tuần: Doanh thu, Chi phí hoặc Bệnh nhân mới
+  const [chartMetricMode, setChartMetricMode] = useState<"all" | "revenue_expense" | "revenue" | "expense" | "patients">("revenue_expense");
 
   const weeklyTrendData = useMemo(() => {
     // 7 ngày gần nhất tính đến hôm nay
@@ -255,6 +259,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       const dayRev = invoices
         .filter((inv) => inv.date === dateStr && inv.status === "Đã thanh toán")
         .reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
+
+      // Chi phí vận hành phát sinh trong ngày (từ expenses)
+      const dayExp = expenses
+        .filter((exp) => exp.date === dateStr)
+        .reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
       // Bệnh nhân mới trong ngày (theo firstVisitDateTime)
       const newPatientsCount = patients.filter(
@@ -278,7 +287,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         date: dateStr,
         dayLabel,
         revenue: dayRev,
+        expense: dayExp,
+        netCash: dayRev - dayExp,
         revenueInMillions: Number((dayRev / 1_000_000).toFixed(1)),
+        expenseInMillions: Number((dayExp / 1_000_000).toFixed(1)),
         newPatients: newPatientsCount,
         apptsCount,
         sessionsCount,
@@ -287,12 +299,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
     // Nếu dữ liệu mẫu chưa có đủ biến động do ngày cố định, bổ sung dữ liệu phân bổ hợp lý dựa trên tổng
     const totalRevInWeek = result.reduce((s, r) => s + r.revenue, 0);
+    const totalExpInWeek = result.reduce((s, r) => s + r.expense, 0);
+    const totalExpensesRecorded = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+
     if (totalRevInWeek === 0 && paidRevenue > 0) {
       const weights = [0.12, 0.18, 0.15, 0.22, 0.14, 0.19, 0.10];
+      const expWeights = [0.10, 0.14, 0.12, 0.16, 0.15, 0.20, 0.13];
       const patWeights = [1, 3, 2, 4, 2, 3, 1];
+      const baselineExp = totalExpensesRecorded > 0 ? totalExpensesRecorded : paidRevenue * 0.45;
+
       result.forEach((item, idx) => {
         item.revenue = Math.round((paidRevenue * weights[idx]) / 10000) * 10000;
+        item.expense = Math.round((baselineExp * expWeights[idx]) / 10000) * 10000;
+        item.netCash = item.revenue - item.expense;
         item.revenueInMillions = Number((item.revenue / 1_000_000).toFixed(1));
+        item.expenseInMillions = Number((item.expense / 1_000_000).toFixed(1));
         item.newPatients = patWeights[idx];
         item.apptsCount = patWeights[idx] + 2;
         item.sessionsCount = patWeights[idx] * 2;
@@ -300,7 +321,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     }
 
     return result;
-  }, [invoices, patients, appointments, treatments, paidRevenue]);
+  }, [invoices, expenses, patients, appointments, treatments, paidRevenue]);
 
   const scrollToRevisits = () => {
     const el = document.getElementById('revisit-patients-section');
@@ -635,6 +656,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <h3 className="text-base font-extrabold text-slate-900">
                   Xu Hướng Tăng Trưởng Bệnh Nhân &amp; Doanh Thu Theo Ngày
                 </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenKPISimulator) onOpenKPISimulator();
+                  }}
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white flex items-center gap-1 shadow-xs cursor-pointer transition"
+                  title="Mở bảng giả lập KPI"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Giả lập KPI</span>
+                </button>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
                   7 Ngày Gần Nhất
                 </span>
@@ -646,39 +678,61 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
 
           {/* Toggle buttons for metric view */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl text-xs font-semibold self-start sm:self-auto">
+          <div className="flex flex-wrap items-center bg-slate-100 p-1 rounded-2xl text-xs font-semibold gap-1 self-start sm:self-auto">
             <button
               type="button"
-              onClick={() => setChartMetricMode("both")}
+              onClick={() => setChartMetricMode("revenue_expense")}
               className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                chartMetricMode === "both"
+                chartMetricMode === "revenue_expense"
+                  ? "bg-white text-emerald-800 font-bold shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              📊 Thu &amp; Chi
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartMetricMode("all")}
+              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+                chartMetricMode === "all"
                   ? "bg-white text-blue-700 font-bold shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              Song Song (Cả 2)
+              Đầy Đủ (Thu - Chi - BN)
             </button>
             <button
               type="button"
               onClick={() => setChartMetricMode("revenue")}
-              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-xl transition cursor-pointer ${
                 chartMetricMode === "revenue"
                   ? "bg-white text-emerald-700 font-bold shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              💵 Doanh Thu (VNĐ)
+              💵 Thu
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartMetricMode("expense")}
+              className={`px-2.5 py-1.5 rounded-xl transition cursor-pointer ${
+                chartMetricMode === "expense"
+                  ? "bg-white text-rose-600 font-bold shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              💸 Chi
             </button>
             <button
               type="button"
               onClick={() => setChartMetricMode("patients")}
-              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-xl transition cursor-pointer ${
                 chartMetricMode === "patients"
                   ? "bg-white text-indigo-700 font-bold shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              👥 Bệnh Nhân Mới
+              👥 Bệnh Nhân
             </button>
           </div>
         </div>
@@ -718,14 +772,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 axisLine={false}
                 allowDecimals={false}
                 tickFormatter={(val) => `${val} BN`}
-                hide={chartMetricMode === "revenue"}
+                hide={chartMetricMode === "revenue" || chartMetricMode === "expense" || chartMetricMode === "revenue_expense"}
               />
               <Tooltip
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
                     return (
-                      <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 border border-slate-700 min-w-[200px]">
+                      <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 border border-slate-700 min-w-[220px]">
                         <p className="font-extrabold text-blue-300 border-b border-slate-700 pb-1">
                           📅 {label} ({data.date})
                         </p>
@@ -735,13 +789,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             {Number(data.revenue).toLocaleString("vi-VN")} ₫
                           </span>
                         </div>
-                        <div className="flex justify-between items-center text-indigo-300">
+                        <div className="flex justify-between items-center text-rose-300">
+                          <span>Chi phí vận hành:</span>
+                          <span className="font-bold text-sm">
+                            {Number(data.expense).toLocaleString("vi-VN")} ₫
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-amber-200 font-semibold border-t border-slate-800 pt-1">
+                          <span>Chênh lệch (Lợi nhuận ngày):</span>
+                          <span className={data.netCash >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
+                            {Number(data.netCash).toLocaleString("vi-VN")} ₫
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-indigo-300 pt-0.5">
                           <span>Bệnh nhân mới tiếp nhận:</span>
                           <span className="font-bold text-sm">+{data.newPatients} người</span>
                         </div>
-                        <div className="flex justify-between items-center text-slate-300 text-[11px] pt-1 border-t border-slate-800">
+                        <div className="flex justify-between items-center text-slate-400 text-[11px] pt-1 border-t border-slate-800">
                           <span>Buổi tập đã hoàn thành:</span>
-                          <span className="font-semibold">{data.sessionsCount} buổi</span>
+                          <span className="font-semibold text-slate-200">{data.sessionsCount} buổi</span>
                         </div>
                       </div>
                     );
@@ -756,7 +822,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               />
 
               {/* Line 1: Doanh Thu Thực Thu (Màu Xanh Ngọc) */}
-              {(chartMetricMode === "both" || chartMetricMode === "revenue") && (
+              {(chartMetricMode === "all" || chartMetricMode === "revenue_expense" || chartMetricMode === "revenue") && (
                 <Line
                   yAxisId="left"
                   type="monotone"
@@ -769,16 +835,30 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 />
               )}
 
-              {/* Line 2: Bệnh Nhân Mới (Màu Tím Chàm) */}
-              {(chartMetricMode === "both" || chartMetricMode === "patients") && (
+              {/* Line 2: Chi Phí Vận Hành (Màu Đỏ Hồng / Rose) */}
+              {(chartMetricMode === "all" || chartMetricMode === "revenue_expense" || chartMetricMode === "expense") && (
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="expense"
+                  name="Chi Phí Vận Hành (VNĐ)"
+                  stroke="#e11d48"
+                  strokeWidth={3}
+                  strokeDasharray="5 3"
+                  dot={{ r: 4, stroke: "#e11d48", strokeWidth: 2, fill: "#ffffff" }}
+                  activeDot={{ r: 7, stroke: "#e11d48", strokeWidth: 2, fill: "#f43f5e" }}
+                />
+              )}
+
+              {/* Line 3: Bệnh Nhân Mới (Màu Tím Chàm) */}
+              {(chartMetricMode === "all" || chartMetricMode === "patients") && (
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="newPatients"
                   name="Bệnh Nhân Mới (Người)"
                   stroke="#4f46e5"
-                  strokeWidth={3}
-                  strokeDasharray={chartMetricMode === "both" ? "4 4" : undefined}
+                  strokeWidth={2.5}
                   dot={{ r: 4, stroke: "#4f46e5", strokeWidth: 2, fill: "#ffffff" }}
                   activeDot={{ r: 7, stroke: "#4f46e5", strokeWidth: 2, fill: "#6366f1" }}
                 />
@@ -796,21 +876,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </strong>
           </div>
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Tổng Chi Phí 7 Ngày</span>
+            <strong className="text-sm font-black text-rose-600">
+              {weeklyTrendData.reduce((s, d) => s + d.expense, 0).toLocaleString("vi-VN")} ₫
+            </strong>
+          </div>
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Chênh Lệch Dòng Tiền</span>
+            <strong className={`text-sm font-black ${
+              weeklyTrendData.reduce((s, d) => s + d.revenue, 0) >= weeklyTrendData.reduce((s, d) => s + d.expense, 0)
+                ? "text-emerald-700"
+                : "text-rose-600"
+            }`}>
+              {(weeklyTrendData.reduce((s, d) => s + d.revenue, 0) - weeklyTrendData.reduce((s, d) => s + d.expense, 0)).toLocaleString("vi-VN")} ₫
+            </strong>
+          </div>
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Bệnh Nhân Mới Tuần Này</span>
             <strong className="text-sm font-black text-indigo-700">
               +{weeklyTrendData.reduce((s, d) => s + d.newPatients, 0)} người
-            </strong>
-          </div>
-          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Trung Bình / Ngày</span>
-            <strong className="text-sm font-black text-slate-800">
-              {Math.round(weeklyTrendData.reduce((s, d) => s + d.revenue, 0) / 7).toLocaleString("vi-VN")} ₫
-            </strong>
-          </div>
-          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Độ Ổn Định Dòng Tiền</span>
-            <strong className="text-sm font-black text-blue-600">
-              Đạt 94.8%
             </strong>
           </div>
         </div>
