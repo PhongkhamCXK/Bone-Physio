@@ -7,6 +7,7 @@ import {
   CLINICAL_DOCTOR_MODALITIES,
   DoctorModalityItem,
   isDoctorUser,
+  SessionSchedule,
 } from '../types';
 import {
   Stethoscope,
@@ -31,8 +32,12 @@ import {
   Plus,
   Info,
   Lock,
+  Save,
+  Check,
+  ClipboardList,
+  ArrowRight,
 } from 'lucide-react';
-import { uid } from '../data/seedData';
+import { uid, PROTOCOL_TEMPLATES, STANDARD_EMR_TEMPLATES } from '../data/seedData';
 
 interface DoctorPrescribedProtocolsSectionProps {
   patient: Patient;
@@ -40,6 +45,7 @@ interface DoctorPrescribedProtocolsSectionProps {
   currentUser?: AppUser | null;
   onUpdatePatient: (updated: Patient) => void;
   onUpdateTreatment?: (updated: Treatment) => void;
+  onAddTreatment?: (treatment: Treatment, autoCreateAppointment?: boolean) => void;
   onOpenProtocolLibrary?: () => void;
 }
 
@@ -49,6 +55,7 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
   currentUser,
   onUpdatePatient,
   onUpdateTreatment,
+  onAddTreatment,
   onOpenProtocolLibrary,
 }) => {
   const isDoctor = isDoctorUser(currentUser);
@@ -56,6 +63,7 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
   const [isEditingCustomPlan, setIsEditingCustomPlan] = useState(false);
   const [customPlanInput, setCustomPlanInput] = useState('');
   const [isOpenOrangeGuideModal, setIsOpenOrangeGuideModal] = useState(false);
+  const [isSavedNotice, setIsSavedNotice] = useState(false);
 
   // Primary active treatment matching patient's main bodyPart
   const primaryTreatment = treatments.find(
@@ -63,6 +71,17 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
   ) || treatments.find(
     (t) => t.patientId === patient.id || t.patientName === patient.name
   );
+
+  const initialSessions = primaryTreatment?.total || patient.treatmentSessions || 15;
+  const [sessionsCount, setSessionsCount] = useState<number>(initialSessions);
+
+  React.useEffect(() => {
+    if (primaryTreatment?.total) {
+      setSessionsCount(primaryTreatment.total);
+    } else if (patient.treatmentSessions) {
+      setSessionsCount(patient.treatmentSessions);
+    }
+  }, [primaryTreatment?.total, patient.treatmentSessions]);
 
   // Active selected modalities codes
   const selectedModalities: string[] = React.useMemo(() => {
@@ -85,6 +104,45 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
       'Bài tập vận động tại chỗ',
     ];
   }, [patient.modalities, primaryTreatment?.modalities]);
+
+  // Suggest protocols matching patient's bodyPart or diagnosis
+  const recommendedProtocols = React.useMemo(() => {
+    const bp = (patient.bodyPart || '').toLowerCase();
+    const diag = (patient.diagnosis || '').toLowerCase();
+
+    // 1. From PROTOCOL_TEMPLATES
+    const matchedProto = PROTOCOL_TEMPLATES.map((pt) => ({
+      id: pt.id,
+      name: pt.name,
+      bodyPart: pt.targetBodyPart,
+      description: pt.description,
+      suggestedSessions: pt.suggestedSessions || 15,
+      modalities: pt.modalities,
+      isExactMatch:
+        pt.targetBodyPart.toLowerCase().includes(bp) ||
+        bp.includes(pt.targetBodyPart.toLowerCase()) ||
+        pt.name.toLowerCase().includes(bp) ||
+        diag.includes(pt.targetBodyPart.toLowerCase()),
+    }));
+
+    // 2. From STANDARD_EMR_TEMPLATES
+    const matchedEMR = STANDARD_EMR_TEMPLATES.map((et) => ({
+      id: et.id,
+      name: et.title,
+      bodyPart: et.bodyPart,
+      description: et.recommendedProtocol,
+      suggestedSessions: et.suggestedSessions || 12,
+      modalities: et.modalities,
+      isExactMatch:
+        et.bodyPart.toLowerCase().includes(bp) ||
+        bp.includes(et.bodyPart.toLowerCase()) ||
+        et.title.toLowerCase().includes(bp) ||
+        diag.includes(et.bodyPart.toLowerCase()),
+    }));
+
+    const all = [...matchedProto, ...matchedEMR];
+    return all.sort((a, b) => (b.isExactMatch ? 1 : 0) - (a.isExactMatch ? 1 : 0));
+  }, [patient.bodyPart, patient.diagnosis]);
 
   const activePlanText = patient.treatmentPlan || primaryTreatment?.plan || `Phác đồ chuyên sâu phục hồi vùng ${patient.bodyPart}`;
 
@@ -212,40 +270,129 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
     }
   };
 
-  const handleSaveCustomPlan = () => {
+  const handleSavePlanAndSessions = (
+    targetPlan?: string,
+    targetSessions?: number,
+    targetModalities?: string[]
+  ) => {
     if (!isDoctor) return;
-    if (!customPlanInput.trim()) return;
-    const newPlan = customPlanInput.trim();
+    const finalPlan = (targetPlan !== undefined ? targetPlan : activePlanText).trim();
+    const finalSessions = Math.max(1, targetSessions !== undefined ? targetSessions : sessionsCount);
+    const finalModalities = targetModalities !== undefined ? targetModalities : selectedModalities;
 
+    if (!finalPlan) return;
+
+    // 1. Prepare / update sessions array, strictly preserving already completed sessions
+    let updatedSessions: SessionSchedule[] = [];
+    if (primaryTreatment?.sessions && primaryTreatment.sessions.length > 0) {
+      updatedSessions = Array.from({ length: finalSessions }, (_, i) => {
+        const existing = primaryTreatment.sessions?.find((s) => s.number === i + 1);
+        return (
+          existing || {
+            number: i + 1,
+            date: '',
+            content: `Buổi ${i + 1}: ${patient.bodyPart} - ${finalPlan.slice(0, 30)}...`,
+            completed: false,
+            isCheckpoint: (i + 1) % 7 === 0 || i + 1 === finalSessions,
+          }
+        );
+      });
+    } else {
+      updatedSessions = Array.from({ length: finalSessions }, (_, i) => ({
+        number: i + 1,
+        date: '',
+        content: `Buổi ${i + 1}: ${patient.bodyPart} - ${finalPlan.slice(0, 30)}...`,
+        completed: false,
+        isCheckpoint: (i + 1) % 7 === 0 || i + 1 === finalSessions,
+      }));
+    }
+
+    // 2. Sync to Treatments list
+    if (primaryTreatment && onUpdateTreatment) {
+      onUpdateTreatment({
+        ...primaryTreatment,
+        plan: finalPlan,
+        total: finalSessions,
+        modalities: finalModalities,
+        sessions: updatedSessions,
+      });
+    } else if (onAddTreatment) {
+      const newTreatment: Treatment = {
+        id: uid('LT'),
+        patientId: patient.id,
+        patientName: patient.name,
+        bodyPart: patient.bodyPart,
+        plan: finalPlan,
+        total: finalSessions,
+        done: 0,
+        followup: patient.nextRevisitDate || new Date().toISOString().split('T')[0],
+        status: 'Đang điều trị',
+        addedFromEMR: true,
+        doctor: currentUser?.name || patient.revisitDoctor || 'BS. CKII Hoàng Minh',
+        modalities: finalModalities,
+        sessions: updatedSessions,
+      };
+      onAddTreatment(newTreatment);
+    }
+
+    // 3. Update Patient record & Audit Log
     const newLog: EMRAuditLog = {
       id: uid('log'),
       timestamp: new Date().toLocaleString('vi-VN'),
       performedBy: currentUser?.name || 'BS. CKII Hoàng Minh',
       role: currentUser?.title || 'Bác sĩ phụ trách',
-      action: 'Điều chỉnh tên phác đồ điều trị',
-      details: `Đổi tên phác đồ: "${activePlanText}" ➔ "${newPlan}".`,
-      treatmentPlan: newPlan,
+      action: 'Bác sĩ chỉ định phác đồ & số buổi liệu trình',
+      details: `Bác sĩ thiết lập phác đồ: "${finalPlan}" với tổng cộng ${finalSessions} buổi điều trị.`,
+      treatmentPlan: finalPlan,
       bodyPart: patient.bodyPart,
-      previousValue: activePlanText,
-      newValue: newPlan,
     };
 
-    const updatedPatient: Patient = {
+    onUpdatePatient({
       ...patient,
-      treatmentPlan: newPlan,
+      treatmentPlan: finalPlan,
+      treatmentSessions: finalSessions,
+      modalities: finalModalities,
       auditLogs: [newLog, ...(patient.auditLogs || [])],
-    };
+    });
 
-    onUpdatePatient(updatedPatient);
+    setIsEditingCustomPlan(false);
+    setIsSavedNotice(true);
+    setTimeout(() => setIsSavedNotice(false), 3500);
+  };
 
-    if (primaryTreatment && onUpdateTreatment) {
-      onUpdateTreatment({
-        ...primaryTreatment,
-        plan: newPlan,
+  const handleSelectProtocolTemplate = (proto: {
+    name: string;
+    description: string;
+    suggestedSessions: number;
+    modalities?: string[];
+  }) => {
+    if (!isDoctor) return;
+    const planTitle = `${proto.name}: ${proto.description}`;
+    const sess = proto.suggestedSessions || sessionsCount || 15;
+    setSessionsCount(sess);
+
+    // Merge modalities if template has them
+    let nextModalities = [...selectedModalities];
+    if (proto.modalities && proto.modalities.length > 0) {
+      CLINICAL_DOCTOR_MODALITIES.forEach((mod) => {
+        const matches = proto.modalities?.some(
+          (m) =>
+            m.toLowerCase().includes(mod.code.toLowerCase()) ||
+            mod.name.toLowerCase().includes(m.toLowerCase())
+        );
+        if (matches && !nextModalities.includes(mod.code)) {
+          nextModalities.push(mod.code);
+        }
       });
     }
 
-    setIsEditingCustomPlan(false);
+    handleSavePlanAndSessions(planTitle, sess, nextModalities);
+  };
+
+  const handleSaveCustomPlan = () => {
+    if (!isDoctor) return;
+    if (!customPlanInput.trim()) return;
+    handleSavePlanAndSessions(customPlanInput.trim(), sessionsCount);
   };
 
   const filteredItems = CLINICAL_DOCTOR_MODALITIES.filter((item) => {
@@ -322,83 +469,247 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
       </div>
 
       {/* Main Prescribed Treatment Protocol Card */}
-      <div className="bg-white p-4 rounded-2xl border border-indigo-100 shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-          <div className="space-y-1 flex-1 min-w-0">
-            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-              <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                Phác đồ chỉ định chính
+      <div className="bg-white p-5 rounded-3xl border border-indigo-100 shadow-xs space-y-4">
+        {/* Step 1: Chọn Phác Đồ Chuẩn Y Khoa */}
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black">
+                1
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                Vùng: {patient.bodyPart}
-              </span>
-              {primaryTreatment && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                  Tiến độ: {primaryTreatment.done}/{primaryTreatment.total} buổi
+              <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Bác Sĩ Chọn Phác Đồ Điều Trị</span>
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                  Vùng: {patient.bodyPart}
                 </span>
-              )}
+              </span>
             </div>
+            <span className="text-[11px] text-slate-500 italic">
+              Bấm chọn nhanh phác đồ gợi ý theo bệnh lý hoặc soạn riêng
+            </span>
+          </div>
 
-            {!isEditingCustomPlan ? (
-              <div className="flex items-baseline space-x-2 pt-1">
-                <h4 className="text-sm font-bold text-slate-900 leading-snug">
-                  {activePlanText}
-                </h4>
-                {isDoctor && (
+          {/* Quick preset cards based on patient's body part */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+            {recommendedProtocols.slice(0, 6).map((proto) => {
+              const isCurrent =
+                activePlanText.toLowerCase().includes(proto.name.toLowerCase()) ||
+                proto.description.toLowerCase().includes(activePlanText.toLowerCase());
+
+              return (
+                <button
+                  key={proto.id}
+                  type="button"
+                  onClick={() => handleSelectProtocolTemplate(proto)}
+                  className={`p-2.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                    isCurrent
+                      ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 ring-2 ring-indigo-500/20 shadow-xs'
+                      : 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/80 text-indigo-700 border border-indigo-100">
+                        {proto.bodyPart}
+                      </span>
+                      <span className="text-[10.5px] font-extrabold text-indigo-600 font-mono">
+                        {proto.suggestedSessions} buổi
+                      </span>
+                    </div>
+                    <div className="font-bold text-xs line-clamp-1 text-slate-900">
+                      {proto.name}
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                      {proto.description}
+                    </p>
+                  </div>
+                  <div className="mt-2 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[10.5px]">
+                    <span className="text-indigo-600 font-bold flex items-center gap-1">
+                      {isCurrent ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Đang áp dụng</span>
+                        </>
+                      ) : (
+                        <span>Áp dụng phác đồ này</span>
+                      )}
+                    </span>
+                    <ArrowRight className="w-3 h-3 text-slate-400" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active plan display & edit bar */}
+          <div className="mt-2 p-3 bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-white rounded-2xl border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center space-x-2 text-[10.5px] font-bold text-indigo-800 uppercase tracking-wider mb-0.5">
+                <ClipboardList className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Nội dung phác đồ đang chỉ định:</span>
+              </div>
+              {!isEditingCustomPlan ? (
+                <div className="flex items-baseline space-x-2">
+                  <p className="text-xs sm:text-sm font-extrabold text-slate-900 leading-snug">
+                    {activePlanText}
+                  </p>
+                  {isDoctor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomPlanInput(activePlanText);
+                        setIsEditingCustomPlan(true);
+                      }}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex-shrink-0 cursor-pointer ml-1"
+                    >
+                      [Đổi tên / Soạn riêng]
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2 pt-1">
+                  <input
+                    type="text"
+                    value={customPlanInput}
+                    onChange={(e) => setCustomPlanInput(e.target.value)}
+                    placeholder="Nhập tên phác đồ điều trị của bác sĩ..."
+                    className="flex-1 px-3 py-1.5 text-xs bg-white border border-indigo-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
                   <button
                     type="button"
-                    onClick={() => {
-                      setCustomPlanInput(activePlanText);
-                      setIsEditingCustomPlan(true);
-                    }}
-                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold hover:underline flex-shrink-0 cursor-pointer"
+                    onClick={handleSaveCustomPlan}
+                    className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 cursor-pointer"
                   >
-                    [Đổi tên]
+                    Lưu
                   </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2 pt-1">
-                <input
-                  type="text"
-                  value={customPlanInput}
-                  onChange={(e) => setCustomPlanInput(e.target.value)}
-                  placeholder="Nhập tên phác đồ điều trị..."
-                  className="flex-1 px-3 py-1.5 text-xs border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveCustomPlan}
-                  className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 cursor-pointer"
-                >
-                  Lưu
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingCustomPlan(false)}
-                  className="px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs hover:bg-slate-200 cursor-pointer"
-                >
-                  Hủy
-                </button>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-1">
-              <span>Bác sĩ phụ trách: <strong className="text-slate-700">{primaryTreatment?.doctor || patient.revisitDoctor || 'BS. CKII Hoàng Minh'}</strong></span>
-              {patient.diagnosis && (
-                <>
-                  <span>•</span>
-                  <span>Chẩn đoán EMR: <strong className="text-slate-700">{patient.diagnosis}</strong></span>
-                </>
-              )}
-              {patient.nextRevisitDate && (
-                <>
-                  <span>•</span>
-                  <span>Ngày hẹn khám nhắc: <strong className="text-amber-700">{patient.nextRevisitDate}</strong></span>
-                </>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingCustomPlan(false)}
+                    className="px-2.5 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs hover:bg-slate-200 cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                </div>
               )}
             </div>
           </div>
+        </div>
+
+        {/* Step 2: BÁC SĨ CHỈ ĐỊNH SỐ BUỔI LIỆU TRÌNH */}
+        <div className="pt-3 border-t border-slate-100 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black">
+                2
+              </span>
+              <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Bác Sĩ Ấn Định Số Buổi Liệu Trình:</span>
+              </span>
+              <span className="px-3 py-0.5 rounded-full text-xs font-black bg-indigo-600 text-white shadow-xs">
+                {sessionsCount} buổi
+              </span>
+            </div>
+
+            {/* Quick Presets for Doctor */}
+            {isDoctor && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-slate-400 font-semibold">Chọn mốc chuẩn:</span>
+                {[10, 12, 15, 21].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setSessionsCount(s);
+                      handleSavePlanAndSessions(activePlanText, s);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      sessionsCount === s
+                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-400/30'
+                        : 'bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200'
+                    }`}
+                    title={`Bác sĩ ấn định phác đồ ${s} buổi`}
+                  >
+                    {s} buổi
+                  </button>
+                ))}
+                <div className="flex items-center space-x-1 pl-1">
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={sessionsCount}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val >= 1) {
+                        setSessionsCount(val);
+                      }
+                    }}
+                    className="w-14 px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                  <span className="text-[11px] text-slate-500">buổi</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Live sync banner explaining consistency between EMR & Treatments Tab */}
+          <div className="bg-gradient-to-r from-indigo-500/10 via-blue-50 to-emerald-50 border border-indigo-200 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-1.5 font-bold text-indigo-950">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>Tính Nhất Quán Giữa EMR &amp; Quản Lý Liệu Trình:</span>
+              </div>
+              <p className="text-slate-600 text-[11.5px] leading-relaxed max-w-xl">
+                Bác sĩ chọn phác đồ và tổng số buổi (<strong>{sessionsCount} buổi</strong>) tại Hồ Sơ EMR này.
+                Trang <strong>Quản Lý Liệu Trình</strong> sẽ hiển thị đúng phác đồ này và phụ trách <strong>điểm danh số buổi thực tế đã làm</strong> (Hiện tại: <strong>{primaryTreatment?.done || 0}/{sessionsCount} buổi</strong>).
+              </p>
+            </div>
+
+            {isDoctor && (
+              <button
+                type="button"
+                onClick={() => handleSavePlanAndSessions(activePlanText, sessionsCount)}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 active:scale-95 text-white font-bold rounded-xl text-xs transition flex items-center space-x-1.5 shadow-md shadow-indigo-600/20 whitespace-nowrap self-start sm:self-auto cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Lưu &amp; Đồng Bộ Liệu Trình</span>
+              </button>
+            )}
+          </div>
+
+          {isSavedNotice && (
+            <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-2xl text-xs font-bold flex items-center space-x-2 animate-in fade-in shadow-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>
+                ✓ Đã lưu phác đồ: &quot;{activePlanText}&quot; ({sessionsCount} buổi)! Dữ liệu đã đồng bộ sang Quản Lý Liệu Trình để KTV điểm danh.
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+          <span>Bác sĩ phụ trách: <strong className="text-slate-700">{primaryTreatment?.doctor || patient.revisitDoctor || 'BS. CKII Hoàng Minh'}</strong></span>
+          {patient.diagnosis && (
+            <>
+              <span>•</span>
+              <span>Chẩn đoán EMR: <strong className="text-slate-700">{patient.diagnosis}</strong></span>
+            </>
+          )}
+          {patient.nextRevisitDate && (
+            <>
+              <span>•</span>
+              <span>Ngày hẹn khám nhắc: <strong className="text-amber-700">{patient.nextRevisitDate}</strong></span>
+            </>
+          )}
+          {primaryTreatment && (
+            <>
+              <span>•</span>
+              <span className="text-blue-700 font-bold">
+                Tiến độ điểm danh hiện tại: {primaryTreatment.done}/{primaryTreatment.total} buổi ({Math.round((primaryTreatment.done / (primaryTreatment.total || 1)) * 100)}%)
+              </span>
+            </>
+          )}
         </div>
       </div>
 

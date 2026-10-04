@@ -141,9 +141,27 @@ export const PatientWeekChecklist: React.FC<PatientWeekChecklistProps> = ({
     treatments[0];
   const completedSessions = Math.min(totalSessions, activeTreatment?.done || 6);
 
-  const [selectedWeek, setSelectedWeek] = useState<number>(1);
+  const [selectedWeek, setSelectedWeek] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(`bp_patient_selected_week_${patient.id}`);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (parsed >= 1 && parsed <= 6) return parsed;
+      }
+    } catch {}
+    return 1;
+  });
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"detail" | "table">("detail");
+
+  const handleSelectWeek = (weekNum: number) => {
+    setSelectedWeek(weekNum);
+    setSelectedDayIndex(0);
+    try {
+      localStorage.setItem(`bp_patient_selected_week_${patient.id}`, weekNum.toString());
+      window.dispatchEvent(new CustomEvent('bp_stick_updated'));
+    } catch {}
+  };
 
   const STORAGE_KEY = `bp_patient_stick_tasks_${patient.id}`;
 
@@ -173,6 +191,7 @@ export const PatientWeekChecklist: React.FC<PatientWeekChecklistProps> = ({
       };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('bp_stick_updated'));
       } catch (e) {
         console.error(e);
       }
@@ -191,6 +210,7 @@ export const PatientWeekChecklist: React.FC<PatientWeekChecklistProps> = ({
       keys.forEach((k) => (updated[k] = true));
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('bp_stick_updated'));
       } catch (e) {}
       return updated;
     });
@@ -207,6 +227,7 @@ export const PatientWeekChecklist: React.FC<PatientWeekChecklistProps> = ({
       keys.forEach((k) => delete updated[k]);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('bp_stick_updated'));
       } catch (e) {}
       return updated;
     });
@@ -412,10 +433,7 @@ export const PatientWeekChecklist: React.FC<PatientWeekChecklistProps> = ({
                 <button
                   key={w.weekNum}
                   type="button"
-                  onClick={() => {
-                    setSelectedWeek(w.weekNum);
-                    setSelectedDayIndex(0);
-                  }}
+                  onClick={() => handleSelectWeek(w.weekNum)}
                   className={`p-2.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
                     isSelected
                       ? "bg-gradient-to-b from-blue-600 to-indigo-700 border-blue-400 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400/40"

@@ -1462,7 +1462,12 @@ export default function App() {
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          if (tab === 'patient-portal') {
+            window.dispatchEvent(new CustomEvent('bp_scroll_to_emr'));
+          }
+        }}
         currentUser={currentUser}
         onLogout={handleLogout}
         isOpen={isSidebarOpen}
@@ -1803,6 +1808,7 @@ export default function App() {
           }}
           onUpdatePatient={handleUpdatePatient}
           onUpdateTreatment={handleUpdateTreatment}
+          onAddTreatment={handleAddTreatment}
           onNavigateToTreatments={() => {
             setSelectedEMRPatient(null);
             setActiveTab('treatments');

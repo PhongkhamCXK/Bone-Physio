@@ -3,6 +3,7 @@ import { Treatment, Patient, SessionSchedule, Staff, WarrantyRecord } from '../t
 import { CopyProtocolModal } from './CopyProtocolModal';
 import { ScheduleTreatmentModal } from './ScheduleTreatmentModal';
 import { ConvertToWarrantyModal } from './ConvertToWarrantyModal';
+import { AttendanceRosterModal } from './AttendanceRosterModal';
 import {
   Plus,
   Copy,
@@ -22,6 +23,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Award,
+  UserCheck,
+  Check,
 } from 'lucide-react';
 import { uid, PROTOCOL_TEMPLATES } from '../data/seedData';
 import { ConfirmModal } from './ConfirmModal';
@@ -59,10 +62,12 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [copySuccessToast, setCopySuccessToast] = useState<string | null>(null);
+  const [attendanceToast, setAttendanceToast] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [scheduleModalTreatment, setScheduleModalTreatment] = useState<Treatment | null>(null);
+  const [attendanceModalTreatment, setAttendanceModalTreatment] = useState<Treatment | null>(null);
   const [warrantyModalTreatment, setWarrantyModalTreatment] = useState<Treatment | null>(null);
   const [treatmentToDelete, setTreatmentToDelete] = useState<Treatment | null>(null);
 
@@ -84,6 +89,64 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
   const [autoCreateAppt, setAutoCreateAppt] = useState(true);
   const [status, setStatus] = useState<'Đang điều trị' | 'Hoàn thành' | 'Tạm dừng'>('Đang điều trị');
 
+  // 1-Click Điểm Danh nhanh buổi trị liệu hôm nay (+1 Buổi)
+  const handleQuickCheckIn = (treatment: Treatment) => {
+    if (treatment.done >= treatment.total) {
+      setAttendanceToast(`Liệu trình của ${treatment.patientName} đã hoàn thành đủ ${treatment.total}/${treatment.total} buổi!`);
+      setTimeout(() => setAttendanceToast(null), 3000);
+      return;
+    }
+
+    const nextNumber = treatment.done + 1;
+    const todayDate = new Date().toISOString().split('T')[0];
+    const nowStr = new Date().toLocaleString('vi-VN');
+
+    let currentSessions = treatment.sessions || [];
+    if (currentSessions.length < treatment.total) {
+      currentSessions = Array.from({ length: treatment.total }, (_, i) => {
+        const existing = currentSessions.find((s) => s.number === i + 1);
+        return (
+          existing || {
+            number: i + 1,
+            date: '',
+            content: `Buổi ${i + 1}: ${treatment.bodyPart} - ${treatment.plan.slice(0, 30)}...`,
+            completed: false,
+            isCheckpoint: (i + 1) % 7 === 0 || i + 1 === treatment.total,
+          }
+        );
+      });
+    }
+
+    const updatedSessions = currentSessions.map((s) => {
+      if (s.number === nextNumber) {
+        return {
+          ...s,
+          completed: true,
+          date: todayDate,
+          clinicConfirmed: true,
+          clinicConfirmedAt: nowStr,
+          technician: staffList[0]?.name || 'KTV. Trần Minh Long',
+          notes: s.notes || `Điểm danh làm dịch vụ buổi ${nextNumber} ngày ${todayDate}`,
+        };
+      }
+      return s;
+    });
+
+    const newDone = treatment.done + 1;
+    const newStatus = newDone >= treatment.total ? 'Hoàn thành' : treatment.status;
+
+    const updated: Treatment = {
+      ...treatment,
+      done: newDone,
+      status: newStatus,
+      sessions: updatedSessions,
+    };
+
+    onUpdateTreatment(updated);
+    setAttendanceToast(`✓ Đã điểm danh Buổi ${nextNumber}/${treatment.total} cho BN ${treatment.patientName}!`);
+    setTimeout(() => setAttendanceToast(null), 3500);
+  };
+
   // Khi chọn bệnh nhân từ danh sách bệnh nhân đang có:
   const handleSelectPatient = (pId: string) => {
     setSelectedPatientId(pId);
@@ -92,13 +155,19 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
       setPatientName(p.name);
       setBodyPart(p.bodyPart);
       if (p.revisitDoctor) setRevisitDoctor(p.revisitDoctor);
-      // Tự động gợi ý phác đồ phù hợp nếu chưa có
-      const matched = PROTOCOL_TEMPLATES.find((pt) =>
-        pt.targetBodyPart.toLowerCase().includes(p.bodyPart.toLowerCase())
-      );
-      if (matched && !plan) {
-        setPlan(matched.description);
-        setTotalSessions(matched.suggestedSessions);
+
+      // Ưu tiên phác đồ và số buổi do Bác sĩ đã ấn định trong EMR của bệnh nhân này
+      if (p.treatmentPlan) {
+        setPlan(p.treatmentPlan);
+        setTotalSessions(p.treatmentSessions || 15);
+      } else {
+        const matched = PROTOCOL_TEMPLATES.find((pt) =>
+          pt.targetBodyPart.toLowerCase().includes(p.bodyPart.toLowerCase())
+        );
+        if (matched && !plan) {
+          setPlan(matched.description);
+          setTotalSessions(matched.suggestedSessions);
+        }
       }
     }
   };
@@ -272,7 +341,11 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
     }
 
     let matchStatus = true;
-    if (statusFilter === 'due_3days') {
+    if (statusFilter === 'in_progress') {
+      matchStatus = t.done < t.total;
+    } else if (statusFilter === 'completed_sessions') {
+      matchStatus = t.done >= t.total;
+    } else if (statusFilter === 'due_3days') {
       matchStatus = diffDays !== null && diffDays >= 0 && diffDays <= 3;
     } else if (statusFilter === 'overdue') {
       matchStatus = diffDays !== null && diffDays < 0;
@@ -283,21 +356,24 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
     return matchQuery && matchStatus;
   });
 
+  const inProgressCount = treatments.filter((t) => t.done < t.total).length;
+  const completedSessionsCount = treatments.filter((t) => t.done >= t.total).length;
+
   return (
     <div className="space-y-6">
       {/* Top action banner */}
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-              <Layers className="w-4 h-4" />
+            <span className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-500/20">
+              <UserCheck className="w-4 h-4" />
             </span>
             <h2 className="text-lg font-bold text-slate-900">
-              Quản Lý Liệu Trình Điều Trị & Phác Đồ
+              Quản Lý Liệu Trình &amp; Điểm Danh Số Buổi Đã Làm
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Bác sĩ sắp xếp lịch liệu trình • Tự động gắn Ngày Khám Nhắc • Đồng bộ EMR & Thông báo hẹn trước 45 phút
+            Phác đồ &amp; tổng số buổi do Bác sĩ ấn định tại EMR • Quản lý liệu trình tập trung điểm danh số buổi thực tế đã làm trên tổng số buổi • Đồng bộ trạng thái 2 bên
           </p>
         </div>
 
@@ -306,7 +382,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
           <button
             type="button"
             onClick={() => setIsCopyModalOpen(true)}
-            className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition shadow-sm"
+            className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition shadow-sm cursor-pointer"
           >
             <Copy className="w-4 h-4 text-indigo-600" />
             <span>📋 Thư Viện Phác Đồ</span>
@@ -316,19 +392,19 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-blue-600/20 transition"
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-blue-600/20 transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Tạo Liệu Trình & Ngày Khám Nhắc</span>
+            <span>+ Tạo Liệu Trình &amp; Ngày Khám Nhắc</span>
           </button>
         </div>
       </div>
 
-      {/* Info notice about Revisit Date & EMR synchronization */}
-      <div className="bg-gradient-to-r from-amber-500/10 via-amber-50 to-emerald-50 border border-amber-200/80 rounded-2xl p-4 flex items-start space-x-3 text-xs text-amber-950">
-        <Bell className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+      {/* Info notice about separation of concerns: Doctor prescribes EMR, Treatment Tab does Attendance */}
+      <div className="bg-gradient-to-r from-blue-500/10 via-indigo-50 to-emerald-50 border border-blue-200/80 rounded-2xl p-4 flex items-start space-x-3 text-xs text-slate-800">
+        <Stethoscope className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
         <div>
-          <span className="font-bold">Đảm bảo Ngày Khám Nhắc luôn đi liền với Liệu Trình:</span> Khi bác sĩ sắp xếp phác đồ điều trị, hệ thống <strong>bắt buộc ấn định Ngày Khám Nhắc</strong> (tái khám đánh giá mốc tuần 1, tuần 2 hoặc cuối phác đồ). Lịch khám nhắc này được tự động đồng bộ sang hồ sơ EMR, hiển thị trên Dashboard ca hẹn trong 3 ngày tới, và kích hoạt thông báo Toast nhắc trước 45 phút trên giao diện chính!
+          <span className="font-bold text-blue-950">Quy trình vận hành chuẩn Y khoa:</span> Bác sĩ phụ trách chọn <strong>Phác đồ điều trị và số buổi liệu trình (10, 12, 15, 21 buổi) tại Hồ Sơ EMR</strong> của bệnh nhân. Tại trang <strong>Quản Lý Liệu Trình</strong> này, Kỹ thuật viên &amp; Lễ tân chỉ cần thực hiện <strong>Điểm Danh số buổi thực tế đã làm</strong> (bấm <em>&quot;✓ Điểm danh (+1 Buổi)&quot;</em> hoặc mở <em>&quot;📋 Sổ Điểm Danh Chi Tiết&quot;</em>).
         </div>
       </div>
 
@@ -410,8 +486,13 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
               <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 <th className="py-4 px-5">Mã & Bệnh Nhân</th>
                 <th className="py-4 px-5">Vùng Điều Trị</th>
-                <th className="py-4 px-5">Phác Đồ Áp Dụng</th>
-                <th className="py-4 px-5">Tiến Độ Buổi Trị Liệu</th>
+                <th className="py-4 px-5">Phác Đồ Bác Sĩ Chỉ Định (EMR)</th>
+                <th className="py-4 px-5">
+                  <div className="flex items-center space-x-1.5 text-blue-700">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Điểm Danh Số Buổi Đã Làm</span>
+                  </div>
+                </th>
                 <th className="py-4 px-5">
                   <div className="flex items-center space-x-1.5 text-amber-700">
                     <Bell className="w-3.5 h-3.5" />
@@ -419,7 +500,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                   </div>
                 </th>
                 <th className="py-4 px-5">Trạng Thái</th>
-                <th className="py-4 px-5 text-right">Bác Sĩ Sắp Xếp & Thao Tác</th>
+                <th className="py-4 px-5 text-right">Điểm Danh & Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -427,6 +508,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                 filtered.map((t) => {
                   const percent = Math.round((t.done / (t.total || 1)) * 100);
                   const revDate = t.revisitDate || t.followup;
+                  const isFinished = t.done >= t.total;
 
                   let diffDays: number | null = null;
                   if (revDate) {
@@ -465,33 +547,67 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                           {/* Highlight if added from EMR */}
                           {t.addedFromEMR && (
                             <span className="block text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold w-max">
-                              ✨ Vùng mới từ EMR
+                              ✨ Ấn định từ EMR
                             </span>
                           )}
                         </div>
                       </td>
 
+                      {/* Phác Đồ Bác Sĩ Chỉ Định (EMR) */}
                       <td className="py-4 px-5 max-w-xs">
-                        <p className="text-slate-700 font-medium line-clamp-2 leading-relaxed">
-                          {t.plan}
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-slate-800 font-bold line-clamp-2 leading-relaxed text-xs">
+                            {t.plan}
+                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap text-[10.5px]">
+                            <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                              <Stethoscope className="w-3 h-3 text-indigo-600" />
+                              <span>{t.doctor || 'BS. CKII Hoàng Minh'}</span>
+                            </span>
+                            {t.patientId && onOpenEMRByPatientId && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenEMRByPatientId(t.patientId!)}
+                                className="text-indigo-600 hover:text-indigo-800 hover:underline font-semibold cursor-pointer"
+                                title="Xem hoặc chỉnh sửa phác đồ tại Hồ Sơ EMR của Bác sĩ"
+                              >
+                                [Xem EMR]
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
+                      {/* USER REQUIREMENT: ĐIỂM DANH SỐ BUỔI ĐÃ LÀM TRÊN BAO NHIÊU BUỔI */}
                       <td className="py-4 px-5">
-                        <div className="w-36 space-y-1">
-                          <div className="flex justify-between text-[11px]">
-                            <span className="font-bold text-slate-700">
-                              {t.done}/{t.total} buổi
+                        <div className="w-44 space-y-1.5">
+                          <div className="flex justify-between items-baseline text-[11px]">
+                            <span className="font-extrabold text-slate-900 text-xs">
+                              Đã làm: <span className="text-blue-700 font-black">{t.done}</span>/{t.total} buổi
                             </span>
-                            <span className="font-bold text-blue-600">
+                            <span className="font-bold text-blue-600 font-mono">
                               {percent}%
                             </span>
                           </div>
-                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                             <div
-                              className="bg-blue-600 h-full rounded-full transition-all duration-300"
-                              style={{ width: `${percent}%` }}
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isFinished ? 'bg-emerald-600' : 'bg-blue-600'
+                              }`}
+                              style={{ width: `${Math.min(100, percent)}%` }}
                             ></div>
+                          </div>
+                          <div>
+                            {isFinished ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Đã hoàn thành 100% ({t.total}/{t.total} buổi)</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                <span>Chưa làm: còn {t.total - t.done} buổi</span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -563,10 +679,40 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                         </span>
                       </td>
 
+                      {/* CỘT THAO TÁC: ĐIỂM DANH LÀ ƯU TIÊN HÀNG ĐẦU */}
                       <td className="py-4 px-5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end space-x-1.5">
-                          {/* USER REQUIREMENT: NẾU KHÁCH XONG LIỆU TRÌNH RỒI THÌ CHUYỂN SANG GÓI BẢO HÀNH */}
-                          {(t.status === 'Hoàn thành' || t.done >= t.total) && (
+                        <div className="flex items-center justify-end space-x-1.5 flex-wrap gap-y-1">
+                          {/* 1. NÚT ĐIỂM DANH NHANH HÔM NAY (+1 BUỔI) */}
+                          {!isFinished ? (
+                            <button
+                              type="button"
+                              onClick={() => handleQuickCheckIn(t)}
+                              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition cursor-pointer"
+                              title={`Bấm 1 chạm để điểm danh hoàn thành Buổi ${t.done + 1}/${t.total} ngày hôm nay`}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Điểm danh Buổi {t.done + 1} (+1)</span>
+                            </button>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold flex items-center space-x-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Đủ {t.total}/{t.total} buổi</span>
+                            </span>
+                          )}
+
+                          {/* 2. NÚT SỔ ĐIỂM DANH TỪNG BUỔI CHI TIẾT */}
+                          <button
+                            type="button"
+                            onClick={() => setAttendanceModalTreatment(t)}
+                            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center space-x-1 transition shadow-2xs cursor-pointer"
+                            title="Mở Sổ Điểm Danh: Xem và tích chọn từng buổi (Buổi 1, Buổi 2...) đã làm hay chưa"
+                          >
+                            <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Sổ Điểm Danh</span>
+                          </button>
+
+                          {/* 3. NẾU ĐÃ XONG LIỆU TRÌNH: CHUYỂN SANG BẢO HÀNH */}
+                          {isFinished && (
                             t.warrantyId || warranties.some((w) => w.treatmentId === t.id) ? (
                               <button
                                 type="button"
@@ -590,28 +736,28 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                             )
                           )}
 
-                          {/* USER REQUIREMENT: NÚT BÁC SĨ SẮP XẾP LỊCH & NGÀY KHÁM NHẮC */}
-                          <button
-                            type="button"
-                            onClick={() => setScheduleModalTreatment(t)}
-                            className="px-2.5 py-1.5 bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold flex items-center space-x-1 transition shadow-2xs cursor-pointer"
-                            title="Bác sĩ sắp xếp liệu trình & ấn định Ngày Khám Nhắc"
-                          >
-                            <CalendarClock className="w-3.5 h-3.5 text-amber-700" />
-                            <span>Sắp Xếp & Khám Nhắc</span>
-                          </button>
-
-                          {/* Open EMR Link if patientId available */}
+                          {/* 4. NÚT MỞ EMR BÁC SĨ (ĐỂ ĐỔI PHÁC ĐỒ / SỐ BUỔI CHUẨN Y KHOA) */}
                           {t.patientId && onOpenEMRByPatientId && (
                             <button
                               type="button"
                               onClick={() => onOpenEMRByPatientId(t.patientId!)}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
-                              title="Xem hồ sơ EMR bệnh nhân"
+                              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center space-x-1 transition shadow-2xs cursor-pointer"
+                              title="Bác sĩ điều chỉnh phác đồ hoặc số buổi tại Hồ Sơ EMR"
                             >
-                              <ExternalLink className="w-4 h-4" />
+                              <Stethoscope className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>EMR Bác Sĩ</span>
                             </button>
                           )}
+
+                          {/* 5. NÚT BÁC SĨ SẮP XẾP LỊCH & NGÀY KHÁM NHẮC */}
+                          <button
+                            type="button"
+                            onClick={() => setScheduleModalTreatment(t)}
+                            className="p-1.5 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition"
+                            title="Bác sĩ sắp xếp liệu trình & ấn định Ngày Khám Nhắc"
+                          >
+                            <CalendarClock className="w-4 h-4 text-amber-700" />
+                          </button>
 
                           {/* Copy quick */}
                           <button
@@ -994,6 +1140,37 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
           }
         />
       )}
+      {/* Modal Sổ Điểm Danh Từng Buổi */}
+      {attendanceModalTreatment && (
+        <AttendanceRosterModal
+          isOpen={!!attendanceModalTreatment}
+          treatment={attendanceModalTreatment}
+          patient={patients.find(
+            (p) =>
+              p.id === attendanceModalTreatment.patientId ||
+              p.name === attendanceModalTreatment.patientName
+          )}
+          staffList={staffList}
+          onClose={() => setAttendanceModalTreatment(null)}
+          onSaveAttendance={(updatedTreatment) => {
+            onUpdateTreatment(updatedTreatment, true);
+            setAttendanceModalTreatment(null);
+            setAttendanceToast(
+              `✓ Đã lưu sổ điểm danh cho BN ${updatedTreatment.patientName} (${updatedTreatment.done}/${updatedTreatment.total} buổi)!`
+            );
+            setTimeout(() => setAttendanceToast(null), 3500);
+          }}
+        />
+      )}
+
+      {/* Toast Thông Báo Điểm Danh */}
+      {attendanceToast && (
+        <div className="fixed bottom-6 left-6 z-50 bg-slate-900 text-white border border-emerald-500/50 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center space-x-2.5 text-sm font-bold animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          <span>{attendanceToast}</span>
+        </div>
+      )}
+
       {/* In-app Copy Toast */}
       {copySuccessToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 text-sm font-semibold animate-in fade-in slide-in-from-bottom-3 duration-200">

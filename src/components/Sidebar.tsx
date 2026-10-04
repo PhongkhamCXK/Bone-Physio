@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'patient-portal',
-          label: 'EMR & Liệu Trình Của Tôi',
+          label: 'Hồ Sơ EMR & Liệu Trình',
           icon: FileText,
         },
         {

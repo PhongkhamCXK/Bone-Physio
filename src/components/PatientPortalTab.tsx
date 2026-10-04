@@ -51,7 +51,6 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { PatientAvatar, AGE_CATEGORY_MAP, getCategoryByAge, ALL_AVATAR_PRESETS } from './PatientAvatar';
-import { getDefaultDailyTasks } from './PatientDailyChecklist';
 import { PatientWeekChecklist } from './PatientWeekChecklist';
 
 interface PatientPortalTabProps {
@@ -92,6 +91,17 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'exercises' | 'warranty' | 'checklist'>(initialTab);
   const [patientData, setPatientData] = useState<Patient>(patient);
   const [showAvatarPickerModal, setShowAvatarPickerModal] = useState(false);
+  const [stickVersion, setStickVersion] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setStickVersion((v) => v + 1);
+    window.addEventListener("bp_stick_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener("bp_stick_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, []);
   const [emrSectionsOpen, setEmrSectionsOpen] = useState({
     baseline: true,
     tracking: true,
@@ -101,58 +111,37 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   const scrollToEMR = (smooth = true) => {
     setActiveSubTab("overview");
     if (onSwitchTab) onSwitchTab("overview");
-    setTimeout(() => {
-      const el = document.getElementById("patient-emr-section");
-      if (el) {
-        el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
-        const mainEl = document.querySelector("main");
-        if (mainEl) {
-          const topOffset = el.getBoundingClientRect().top - mainEl.getBoundingClientRect().top + mainEl.scrollTop - 24;
-          mainEl.scrollTo({ top: Math.max(0, topOffset), behavior: smooth ? "smooth" : "auto" });
-        }
+
+    const performScroll = () => {
+      const targetCard = document.getElementById("patient-emr-card") || document.getElementById("patient-emr-section");
+      const mainEl = document.querySelector("main");
+      if (targetCard && mainEl) {
+        const mainRect = mainEl.getBoundingClientRect();
+        const targetRect = targetCard.getBoundingClientRect();
+        const targetScrollTop = mainEl.scrollTop + (targetRect.top - mainRect.top) - 16;
+        mainEl.scrollTo({ top: Math.max(0, targetScrollTop), behavior: smooth ? "smooth" : "auto" });
+      } else if (targetCard) {
+        targetCard.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
       }
-    }, 60);
+    };
+
+    requestAnimationFrame(performScroll);
+    setTimeout(performScroll, 50);
+    setTimeout(performScroll, 160);
+    setTimeout(performScroll, 350);
   };
+
+  useEffect(() => {
+    const handleScrollToEMR = () => {
+      scrollToEMR(true);
+    };
+    window.addEventListener("bp_scroll_to_emr", handleScrollToEMR);
+    return () => window.removeEventListener("bp_scroll_to_emr", handleScrollToEMR);
+  }, []);
 
   useEffect(() => {
     setPatientData(patient);
   }, [patient]);
-
-  const hasDailyChecklist = Boolean(
-    (patientData.dailyChecklist && patientData.dailyChecklist.length > 0) ||
-    getDefaultDailyTasks(patientData, exercises).length > 0
-  );
-
-  // Checklist tab is always enabled with PatientWeekChecklist
-
-  const handleToggleChecklistTask = (taskId: string) => {
-    const currentTasks =
-      patientData.dailyChecklist && patientData.dailyChecklist.length > 0
-        ? patientData.dailyChecklist
-        : getDefaultDailyTasks(patientData, exercises);
-
-    const updatedTasks = currentTasks.map((t) =>
-      t.id === taskId ? { ...t, isCompleted: !t.isCompleted } : t
-    );
-    const updatedPatient: Patient = {
-      ...patientData,
-      dailyChecklist: updatedTasks,
-    };
-    setPatientData(updatedPatient);
-    try {
-      const raw = localStorage.getItem('bp_patients');
-      if (raw) {
-        const list = JSON.parse(raw);
-        const nextList = list.map((p: Patient) => (p.id === patient.id ? updatedPatient : p));
-        localStorage.setItem('bp_patients', JSON.stringify(nextList));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-    if (onUpdatePatient) {
-      onUpdatePatient(updatedPatient);
-    }
-  };
 
   const handleConfirmWorkoutSession = (treatmentId: string, sessionNumber: number) => {
     const targetTreatment = treatments.find((t) => t.id === treatmentId);
@@ -253,6 +242,11 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   useEffect(() => {
     if (initialTab) {
       setActiveSubTab(initialTab);
+      if (initialTab === 'overview') {
+        setTimeout(() => {
+          scrollToEMR(true);
+        }, 120);
+      }
     }
   }, [initialTab]);
 
@@ -449,12 +443,41 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   // List of exercises to display depending on filter
   const displayedExercises = exerciseFilter === 'assigned' ? assignedExs : exercises;
 
-    const checklist =
-      patientData.dailyChecklist && patientData.dailyChecklist.length > 0
-        ? patientData.dailyChecklist
-        : getDefaultDailyTasks(patientData);
-    const completedChecklistCount = checklist.filter((i) => i.isCompleted).length;
-    const totalChecklistCount = checklist.length;
+    // Đồng bộ check-list nhất quán với PatientWeekChecklist (Tập tại nhà • Ăn uống • Thực đơn)
+    let stickData: Record<string, boolean> = {};
+    try {
+      const raw = localStorage.getItem(`bp_patient_stick_tasks_${patientData.id}`);
+      if (raw) {
+        stickData = JSON.parse(raw);
+      } else {
+        stickData = {
+          "w1_d0_tap_tai_nha": true,
+          "w1_d0_an_uong": true,
+          "w1_d0_thuc_don": true,
+          "w1_d1_tap_tai_nha": true,
+          "w1_d1_an_uong": true,
+        };
+      }
+    } catch {
+      stickData = {};
+    }
+
+    const jsDay = new Date().getDay();
+    const currentDayIdx = jsDay === 0 ? 6 : jsDay - 1; // 0 = Thứ 2, ..., 6 = Chủ Nhật
+    const storedWeek = parseInt(localStorage.getItem(`bp_patient_selected_week_${patientData.id}`) || '1', 10);
+    const activeWeekNum = Math.min(6, Math.max(1, isNaN(storedWeek) ? 1 : storedWeek));
+    const todayStickKeys = [
+      `w${activeWeekNum}_d${currentDayIdx}_tap_tai_nha`,
+      `w${activeWeekNum}_d${currentDayIdx}_an_uong`,
+      `w${activeWeekNum}_d${currentDayIdx}_thuc_don`,
+    ];
+    const todayCompletedCount = todayStickKeys.filter((k) => stickData[k]).length;
+    let weekCompletedCount = 0;
+    for (let d = 0; d < 7; d++) {
+      if (stickData[`w${activeWeekNum}_d${d}_tap_tai_nha`]) weekCompletedCount++;
+      if (stickData[`w${activeWeekNum}_d${d}_an_uong`]) weekCompletedCount++;
+      if (stickData[`w${activeWeekNum}_d${d}_thuc_don`]) weekCompletedCount++;
+    }
 
     const effectiveMetrics =
       patient.healthMetrics && patient.healthMetrics.length > 0
@@ -627,16 +650,19 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                 setActiveSubTab('checklist');
                 if (onSwitchTab) onSwitchTab('checklist');
               }}
-              className="bg-emerald-500/25 hover:bg-emerald-500/35 cursor-pointer backdrop-blur-md p-4 rounded-2xl border border-emerald-300/40 text-center min-w-[130px] transition"
-              title="Bấm để xem việc cần làm hôm nay"
+              className="bg-emerald-500/25 hover:bg-emerald-500/35 cursor-pointer backdrop-blur-md p-4 rounded-2xl border border-emerald-300/40 text-center min-w-[135px] transition active:scale-95"
+              title="Bấm để xem check-list 3 mục hôm nay (Tập tại nhà • Ăn uống • Thực đơn)"
             >
               <span className="text-xs text-emerald-200 flex items-center justify-center space-x-1 font-bold">
                 <ListTodo className="w-3.5 h-3.5" />
-                <span>Việc cần làm</span>
+                <span>Việc cần làm hôm nay</span>
               </span>
               <h3 className="text-2xl sm:text-3xl font-black text-emerald-300 mt-0.5">
-                {completedChecklistCount}/{totalChecklistCount}
+                {todayCompletedCount}/3
               </h3>
+              <span className="text-[10px] text-emerald-200/90 font-medium block mt-0.5">
+                Tuần này: {weekCompletedCount}/21 mục
+              </span>
             </div>
             <div
               onClick={() => {
@@ -811,7 +837,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column: EMR Detail & Progression & Treatments */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm lg:col-span-2 space-y-6">
+          <div id="patient-emr-card" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm lg:col-span-2 space-y-6 scroll-mt-6">
             {/* Diagnostic overview */}
             <div className="space-y-3">
               <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1031,7 +1057,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                             className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 transition flex items-center space-x-2 cursor-pointer"
                           >
                             <CheckCircle2 className="w-4 h-4" />
-                            <span>Xác Nhận Hôm Nay Tôi Đã Tập Buổi Này</span>
+                            <span>Xác Nhận Đã Tập Buổi Này</span>
                           </button>
                         ) : (
                           <button
@@ -1687,7 +1713,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
                 <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                   <Calendar className="w-4 h-4 text-blue-600" />
-                  <span>Lịch Hẹn Của Tôi ({myAppts.length})</span>
+                  <span>Lịch Hẹn Khám ({myAppts.length})</span>
                 </h4>
                 <div className="space-y-2">
                   {myAppts.map((a) => (
@@ -1712,7 +1738,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
                 <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                   <CreditCard className="w-4 h-4 text-emerald-600" />
-                  <span>Hóa Đơn Của Tôi ({myInvoices.length})</span>
+                  <span>Hóa Đơn & Thanh Toán ({myInvoices.length})</span>
                 </h4>
                 <div className="space-y-2">
                   {myInvoices.map((inv) => (

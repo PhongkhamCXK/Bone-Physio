@@ -70,6 +70,7 @@ interface EMRDetailModalProps {
   onAddRegion: (newRegion: BodyRegion, autoTreatment: Treatment) => void;
   onUpdatePatient: (updated: Patient) => void;
   onUpdateTreatment?: (updated: Treatment) => void;
+  onAddTreatment?: (treatment: Treatment, autoCreateAppointment?: boolean) => void;
   onNavigateToTreatments?: () => void;
   onOpenPatientPortal?: (patient: Patient) => void;
 }
@@ -88,6 +89,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   onAddRegion,
   onUpdatePatient,
   onUpdateTreatment,
+  onAddTreatment,
   onNavigateToTreatments,
   onOpenPatientPortal,
 }) => {
@@ -1393,6 +1395,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
               currentUser={currentUser}
               onUpdatePatient={onUpdatePatient}
               onUpdateTreatment={onUpdateTreatment}
+              onAddTreatment={onAddTreatment}
               onOpenProtocolLibrary={() => setIsCopyProtocolOpen(true)}
             />
 
@@ -1830,31 +1833,72 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
           existingTreatments={treatments}
           onSelectProtocol={(protoText, sessions, targetBodyPart) => {
             if (!patient) return;
+            const finalSessions = sessions || 15;
+            const finalPart = targetBodyPart || patient.bodyPart;
             const newLog: EMRAuditLog = {
               id: uid('log'),
               timestamp: new Date().toLocaleString('vi-VN'),
               performedBy: currentUser?.name || 'BS. CKII Hoàng Minh',
               role: currentUser?.title || 'Bác sĩ phụ trách',
               action: 'Chọn phác đồ điều trị từ thư viện chuẩn',
-              details: `Bác sĩ đã áp dụng phác đồ: "${protoText}" (${sessions || 10} buổi) cho vùng ${targetBodyPart || patient.bodyPart}.`,
+              details: `Bác sĩ đã áp dụng phác đồ: "${protoText}" (${finalSessions} buổi) cho vùng ${finalPart}.`,
               treatmentPlan: protoText,
-              bodyPart: targetBodyPart || patient.bodyPart,
+              bodyPart: finalPart,
             };
             const updatedPatient: Patient = {
               ...patient,
               treatmentPlan: protoText,
+              treatmentSessions: finalSessions,
               auditLogs: [newLog, ...(patient.auditLogs || [])],
             };
             onUpdatePatient(updatedPatient);
 
             const primaryT = patientTreatments[0];
             if (primaryT && onUpdateTreatment) {
+              let updatedSessions = primaryT.sessions || [];
+              if (updatedSessions.length !== finalSessions) {
+                updatedSessions = Array.from({ length: finalSessions }, (_, i) => {
+                  const existing = primaryT.sessions?.find((s) => s.number === i + 1);
+                  return (
+                    existing || {
+                      number: i + 1,
+                      date: '',
+                      content: `Buổi ${i + 1}: ${finalPart} - ${protoText.slice(0, 30)}...`,
+                      completed: false,
+                      isCheckpoint: (i + 1) % 7 === 0 || i + 1 === finalSessions,
+                    }
+                  );
+                });
+              }
               onUpdateTreatment({
                 ...primaryT,
                 plan: protoText,
-                total: sessions || primaryT.total,
-                bodyPart: targetBodyPart || primaryT.bodyPart,
+                total: finalSessions,
+                bodyPart: finalPart,
+                sessions: updatedSessions,
               });
+            } else if (onAddTreatment) {
+              const newTreatment: Treatment = {
+                id: uid('LT'),
+                patientId: patient.id,
+                patientName: patient.name,
+                bodyPart: finalPart,
+                plan: protoText,
+                total: finalSessions,
+                done: 0,
+                followup: patient.nextRevisitDate || new Date().toISOString().split('T')[0],
+                status: 'Đang điều trị',
+                addedFromEMR: true,
+                doctor: currentUser?.name || 'BS. CKII Hoàng Minh',
+                sessions: Array.from({ length: finalSessions }, (_, i) => ({
+                  number: i + 1,
+                  date: '',
+                  content: `Buổi ${i + 1}: ${finalPart} - ${protoText.slice(0, 30)}...`,
+                  completed: false,
+                  isCheckpoint: (i + 1) % 7 === 0 || i + 1 === finalSessions,
+                })),
+              };
+              onAddTreatment(newTreatment);
             }
           }}
         />

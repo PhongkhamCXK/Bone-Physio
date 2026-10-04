@@ -92,8 +92,12 @@ export const Header: React.FC<HeaderProps> = ({
       subtitle: 'Khung chat trực tuyến tư vấn bệnh nhân, giải đáp phác đồ và hỗ trợ điều trị',
     },
     'patient-portal': {
-      title: 'Cổng Bệnh Nhân Tra Cứu EMR',
-      subtitle: 'Bệnh án điện tử, mốc tái khám và tiến trình hồi phục',
+      title: 'Cổng Bệnh Nhân Tra Cứu EMR & Hồ Sơ Lâm Sàng',
+      subtitle: 'Bệnh án điện tử, chỉ số lâm sàng ban đầu và lịch trình điều trị',
+    },
+    'patient-checklist': {
+      title: 'Lịch Liệu Trình 21 Buổi (6 Tuần) & Donut Chăm Chỉ',
+      subtitle: 'Check-list 3 mục mỗi ngày (Tập tại nhà • Ăn uống • Thực đơn) và Biểu đồ Donut Chăm chỉ',
     },
     'patient-exercises': {
       title: 'Bài Tập Phục Hồi Tại Nhà Bác Sĩ Chỉ Định',
@@ -104,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
       subtitle: 'Chế độ bảo dưỡng, nắn chỉnh duy trì và theo dõi khách hàng sau khi hoàn tất liệu trình',
     },
     'patient-warranty': {
-      title: 'Thẻ Bảo Hành & Quyền Lợi Bảo Dưỡng Của Tôi',
+      title: 'Thẻ Bảo Hành & Quyền Lợi Bảo Dưỡng',
       subtitle: 'Chứng nhận bảo hành điện tử chính thức và số buổi bảo dưỡng định kỳ miễn phí',
     },
     'master-data': {

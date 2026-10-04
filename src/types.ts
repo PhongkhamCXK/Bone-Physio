@@ -317,6 +317,7 @@ export interface Patient {
   dailyChecklist?: DailyChecklistTask[];
   doctorAdvice?: string; // Lời khuyên & dặn dò của bác sĩ
   treatmentPlan?: string; // Phác đồ điều trị chính bác sĩ chọn
+  treatmentSessions?: number; // Số buổi liệu trình do Bác sĩ chỉ định ấn định (VD: 10, 12, 15, 21 buổi)
   modalities?: string[]; // Danh sách các phác đồ / kỹ thuật bác sĩ chọn: Shockwave, EBS, TENS, DIY, Chiếu đèn cấp dưỡng, Giãn cơ, Di cơ, Tác động cột sống, Chế độ dinh dưỡng, Chế độ tập luyện tại nhà, Bài tập vận động tại chỗ
   selectedProtocols?: string[]; // Danh sách tên các phác đồ chuẩn bác sĩ đã chọn
   treatmentGoals?: string[]; // Mục tiêu điều trị do Bác sĩ thiết lập (VD: Giảm thang đau VAS < 2, Phục hồi biên độ khớp gối 125 độ...)

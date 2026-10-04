@@ -32,33 +32,14 @@ export const getDefaultDailyTasks = (patient: Patient, exercises?: Exercise[]): 
   const habits = patient.habits;
   const tasks: DailyChecklistTask[] = [];
 
-  // 1. NHẮC NHỞ ĐẦU NGÀY: Khởi động & Uống nước ấm
-  tasks.push({
-    id: 'task_morning_water',
-    task: 'Lời nhắc đầu ngày: Uống 1 ly nước ấm 300ml ngay sau khi thức dậy',
-    timeOfDay: 'Đầu ngày (06:30 - 07:00)',
-    category: 'Dinh dưỡng',
-    isCompleted: false,
-    note: 'Kích hoạt tuần hoàn máu, bôi trơn bao khớp và đào thải độc tố cơ bắp sau đêm dài',
-  });
-
-  tasks.push({
-    id: 'task_morning_stretch',
-    task: `Bài tập đầu ngày: Khởi động xoay khớp nhẹ nhàng & kéo giãn cơ vùng ${bp}`,
-    timeOfDay: 'Đầu ngày (07:00 - 07:30)',
-    category: 'Bài tập',
-    isCompleted: false,
-    note: 'Giảm hiện tượng cứng khớp buổi sáng, không thực hiện các động tác vặn xoắn đột ngột',
-  });
-
-  // 2. BÀI TẬP VỀ NHÀ (Chỉ hiển thị nếu Bác sĩ đã chỉ định bài tập, nếu trống thì bỏ mục này đi)
+  // 1. MỤC 1: BÀI TẬP PHỤC HỒI TẠI NHÀ (Bác sĩ chỉ định)
   if (patient.assignedExercises && patient.assignedExercises.length > 0 && exercises && exercises.length > 0) {
     patient.assignedExercises.forEach((exId, idx) => {
       const foundEx = exercises.find((e) => e.id === exId);
       if (foundEx) {
         tasks.push({
           id: `task_ex_${foundEx.id}`,
-          task: `Bài tập về nhà: ${foundEx.name} (${foundEx.sets || '3 hiệp'} x ${foundEx.reps || '10 lần'})`,
+          task: `Bài tập tại nhà: ${foundEx.name} (${foundEx.sets || '3 hiệp'} x ${foundEx.reps || '10 lần'})`,
           timeOfDay: idx % 2 === 0 ? 'Buổi sáng (08:30)' : 'Buổi chiều (17:30)',
           category: 'Bài tập',
           isCompleted: false,
@@ -66,37 +47,44 @@ export const getDefaultDailyTasks = (patient: Patient, exercises?: Exercise[]): 
         });
       }
     });
-  }
-
-  // 3. CHẾ ĐỘ ĂN UỐNG & KIỂM SOÁT BIA RƯỢU / NHẬU NHẸT MỖI NGÀY
-  // (Chỉ thêm nếu bệnh nhân có thói quen rượu bia hoặc Bác sĩ chọn phác đồ dinh dưỡng, nếu trống thì bỏ mục này đi)
-  if (habits?.alcoholHeavy || habits?.alcohol) {
+  } else {
     tasks.push({
-      id: 'task_alcohol_diet',
-      task: 'Kiểm soát ăn uống & nhậu nhẹt: Hạn chế tối đa rượu bia hôm nay, kiêng đồ nhậu cay nóng nhiều dầu mỡ',
-      timeOfDay: 'Bữa trưa & Bữa tối',
-      category: 'Ăn uống',
+      id: 'task_morning_stretch',
+      task: `Bài tập tại nhà: Khởi động xoay khớp nhẹ nhàng & kéo giãn cơ vùng ${bp}`,
+      timeOfDay: 'Buổi sáng (07:30)',
+      category: 'Bài tập',
       isCompleted: false,
-      note: 'Chất cồn và dầu mỡ làm tăng phản ứng viêm bao hoạt dịch, cản trở mô liên kết phục hồi',
+      note: 'Giảm hiện tượng cứng khớp buổi sáng, không thực hiện các động tác vặn xoắn đột ngột',
     });
   }
 
+  // 2. MỤC 2: ĂN UỐNG (Nước ấm & Kiêng cữ bia rượu / nhậu nhẹt)
   tasks.push({
-    id: 'task_diet_calcium',
-    task: 'Ăn uống dinh dưỡng: Tăng cường Canxi & Vitamin D3 (Sữa hạt, rau xanh thẫm, cá hồi, hạt chia)',
-    timeOfDay: 'Bữa sáng & Bữa trưa',
+    id: 'task_water_day',
+    task: 'Ăn uống: Uống đủ 2.0 - 2.5 lít nước ấm trong ngày (chia đều từng cữ)',
+    timeOfDay: 'Cả ngày',
     category: 'Ăn uống',
     isCompleted: false,
-    note: 'Hỗ trợ tái tạo sụn khớp và giảm thoái hóa xương dưới sụn',
+    note: 'Cung cấp đủ ẩm cho nhân đĩa đệm và hệ thống tuần hoàn ngoại vi, bôi trơn bao khớp',
   });
 
   tasks.push({
-    id: 'task_water_day',
-    task: 'Uống đủ 2.0 - 2.5 lít nước trong ngày (chia đều từng cữ, không uống dồn)',
-    timeOfDay: 'Cả ngày',
-    category: 'Dinh dưỡng',
+    id: 'task_alcohol_diet',
+    task: 'Kiêng cữ: Tuyệt đối không bia rượu, đồ nhậu cay nóng nhiều dầu mỡ hôm nay',
+    timeOfDay: 'Bữa trưa & Bữa tối',
+    category: 'Ăn uống',
     isCompleted: false,
-    note: 'Cung cấp đủ ẩm cho nhân đĩa đệm và hệ thống tuần hoàn ngoại vi',
+    note: 'Chất cồn và dầu mỡ làm tăng phản ứng viêm bao hoạt dịch, cản trở mô liên kết phục hồi',
+  });
+
+  // 3. MỤC 3: THỰC ĐƠN DINH DƯỠNG (Sáng - Trưa - Tối)
+  tasks.push({
+    id: 'task_diet_calcium',
+    task: 'Thực đơn: Bổ sung Canxi hữu cơ, Vitamin D3 & Rau xanh thẫm (Sáng - Trưa - Tối)',
+    timeOfDay: '3 bữa chính',
+    category: 'Thực đơn',
+    isCompleted: false,
+    note: 'Hỗ trợ tái tạo sụn khớp, giảm thoái hóa xương dưới sụn và cân bằng năng lượng',
   });
 
   // 4. THÓI QUEN CÔNG VIỆC & VẬT LÝ TRỊ LIỆU TỐI
