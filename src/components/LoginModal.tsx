@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppUser, Patient, Staff, Technician } from '../types';
 import { Lock, User, Shield, Key, Eye, EyeOff, Activity, Stethoscope, HeartPulse, Loader2 } from 'lucide-react';
 import { getSupabaseClient, parseStaffRow, parsePatientRow } from '../services/supabaseClient';
+import { BrandLogo } from './BrandLogo';
 
 interface LoginModalProps {
   isOpen?: boolean;
@@ -268,14 +269,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200/80">
       {/* Clinic branding badge */}
       <div className="text-center space-y-2.5 mb-6">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 text-white mx-auto flex items-center justify-center font-black text-2xl shadow-xl shadow-blue-500/30 border border-blue-400/40">
-          <Stethoscope className="w-7 h-7" />
+        <div className="flex justify-center">
+          <BrandLogo
+            size="lg"
+            theme="light"
+            showText={false}
+          />
         </div>
         <div>
-          <h2 className="text-2xl font-black tracking-tight text-slate-900">
+          <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center justify-center gap-1.5">
             BONE PHYSIO
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wider">
+              SPINE
+            </span>
           </h2>
-          <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mt-0.5">
+          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mt-1">
             Cơ Xương Khớp & Phục Hồi Chức Năng
           </p>
           {/* USER REQUIREMENT: Dòng chữ chăm sóc sức khoẻ toàn diện */}

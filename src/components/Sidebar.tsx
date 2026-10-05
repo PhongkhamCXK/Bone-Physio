@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppUser } from '../types';
+import { BrandLogo } from './BrandLogo';
 import {
   LayoutDashboard,
   Calendar,
@@ -137,18 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-4 space-y-4">
           {/* Logo Brand Header */}
           <div className="flex items-center justify-between px-2 pt-1 pb-2 border-b border-slate-800">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
-                <HeartPulse className="w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
-                  BONE PHYSIO
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">PRO</span>
-                </h1>
-                <p className="text-[11px] text-slate-400 font-medium">Hệ Thống Phục Hồi Cơ Xương Khớp</p>
-              </div>
-            </div>
+            <BrandLogo size="md" subtitle="Hệ Thống Phục Hồi Cơ Xương Khớp" />
             <button
               type="button"
               onClick={onCloseMobile}

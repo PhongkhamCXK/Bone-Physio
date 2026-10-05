@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppUser, Patient } from '../types';
+import { BrandLogo } from './BrandLogo';
 import {
   Menu,
   FileSpreadsheet,
@@ -131,6 +132,10 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Menu className="w-5 h-5" />
         </button>
+
+        <div className="lg:hidden">
+          <BrandLogo size="sm" showText={false} theme="light" />
+        </div>
 
         <div>
           <h1 className="text-base sm:text-lg font-extrabold text-slate-900 leading-tight">

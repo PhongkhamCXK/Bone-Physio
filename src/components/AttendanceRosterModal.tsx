@@ -35,24 +35,22 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
   staffList = [],
   onSaveAttendance,
 }) => {
-  if (!isOpen || !treatment) return null;
-
-  const totalSessions = treatment.total || 15;
+  const totalSessions = treatment?.total || 15;
   const todayStr = new Date().toISOString().split('T')[0];
   const nowStr = new Date().toLocaleString('vi-VN');
 
   // Initialize session array up to totalSessions
   const [sessions, setSessions] = useState<SessionSchedule[]>(() => {
-    let base = treatment.sessions || [];
+    let base = treatment?.sessions || [];
     if (base.length < totalSessions) {
       base = Array.from({ length: totalSessions }, (_, i) => {
         const found = base.find((s) => s.number === i + 1);
         return (
           found || {
             number: i + 1,
-            date: i < treatment.done ? todayStr : '',
-            content: `Buổi ${i + 1}: ${treatment.bodyPart} - ${treatment.plan.slice(0, 30)}...`,
-            completed: i < treatment.done,
+            date: i < (treatment?.done || 0) ? todayStr : '',
+            content: `Buổi ${i + 1}: ${treatment?.bodyPart || ''} - ${(treatment?.plan || '').slice(0, 30)}...`,
+            completed: i < (treatment?.done || 0),
             isCheckpoint: (i + 1) % 7 === 0 || i + 1 === totalSessions,
           }
         );
@@ -66,6 +64,7 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
   );
 
   useEffect(() => {
+    if (!treatment) return;
     let base = treatment.sessions || [];
     if (base.length < totalSessions) {
       base = Array.from({ length: totalSessions }, (_, i) => {
@@ -82,7 +81,9 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
       });
     }
     setSessions(base);
-  }, [treatment]);
+  }, [treatment, totalSessions]);
+
+  if (!isOpen || !treatment) return null;
 
   const doneCount = sessions.filter(
     (s) => s.completed || (s.clinicConfirmed && s.patientConfirmed)

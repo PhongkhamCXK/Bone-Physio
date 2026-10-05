@@ -37,14 +37,12 @@ export const DoctorPrescriptionModal: React.FC<DoctorPrescriptionModalProps> = (
   onSavePrescription,
   isFirstVisitReminder = false,
 }) => {
-  if (!isOpen) return null;
-
   // Selected exercises
   const initialExercises: string[] =
-    patient.assignedExercises && patient.assignedExercises.length > 0
+    patient?.assignedExercises && patient.assignedExercises.length > 0
       ? patient.assignedExercises
       : (() => {
-          const bp = (patient.bodyPart || "").toLowerCase();
+          const bp = (patient?.bodyPart || "").toLowerCase();
           if (bp.includes("cổ") || bp.includes("vai")) return ["EX001", "EX002", "EX003"];
           if (bp.includes("gối") || bp.includes("chân")) return ["EX007", "EX008", "EX006"];
           return ["EX004", "EX005", "EX006"];
@@ -54,17 +52,19 @@ export const DoctorPrescriptionModal: React.FC<DoctorPrescriptionModalProps> = (
 
   // 7-day Diet plan
   const [dietPlan, setDietPlan] = useState<DietDay[]>(
-    patient.dietPlan && patient.dietPlan.length === 7 ? patient.dietPlan : STANDARD_DIET_PLAN
+    patient?.dietPlan && patient.dietPlan.length === 7 ? patient.dietPlan : STANDARD_DIET_PLAN
   );
 
   // Doctor custom note / advice
   const [doctorAdvice, setDoctorAdvice] = useState<string>(
-    patient.doctorAdvice ||
+    patient?.doctorAdvice ||
       "Bác sĩ chỉ định: Duy trì tập luyện đều đặn theo phác đồ, uống đủ 2L nước ấm mỗi ngày, kiêng cữ bia rượu và đồ nhậu cay nóng dầu mỡ để bảo vệ hoạt dịch khớp."
   );
 
   // Active tab in prescription modal
   const [activeTab, setActiveTab] = useState<"exercises" | "diet" | "habits">("exercises");
+
+  if (!isOpen || !patient) return null;
 
   const toggleExercise = (exId: string) => {
     setSelectedExIds((prev) =>

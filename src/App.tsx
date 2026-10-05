@@ -278,6 +278,7 @@ export default function App() {
   // Modal states
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedEMRPatient, setSelectedEMRPatient] = useState<Patient | null>(null);
+  const [selectedPortalPatientId, setSelectedPortalPatientId] = useState<string>('');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isKPISimulatorOpen, setIsKPISimulatorOpen] = useState(false);
   const [isCheckInOutModalOpen, setIsCheckInOutModalOpen] = useState(false);
@@ -1453,7 +1454,6 @@ export default function App() {
   }
 
   // Current Patient for Patient Portal
-  const [selectedPortalPatientId, setSelectedPortalPatientId] = useState<string>('');
   const activePortalPatient =
     patients.find((p) => p.id === (selectedPortalPatientId || currentUser.id)) || patients[0];
 

@@ -37,8 +37,6 @@ export const ConvertToWarrantyModal: React.FC<ConvertToWarrantyModalProps> = ({
   doctors,
   onConfirm,
 }) => {
-  if (!isOpen || !treatment) return null;
-
   const defaultPkg = WARRANTY_PACKAGE_TEMPLATES[1] || WARRANTY_PACKAGE_TEMPLATES[0]; // VIP 6 Tháng
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(defaultPkg.id);
@@ -46,7 +44,7 @@ export const ConvertToWarrantyModal: React.FC<ConvertToWarrantyModalProps> = ({
   const [durationMonths, setDurationMonths] = useState<number>(defaultPkg.durationMonths);
   const [totalSessions, setTotalSessions] = useState<number>(defaultPkg.totalMaintenanceSessions);
   const [doctor, setDoctor] = useState<string>(
-    treatment.doctor || (doctors[0]?.name ?? 'BS. CKII Hoàng Minh')
+    treatment?.doctor || (doctors[0]?.name ?? 'BS. CKII Hoàng Minh')
   );
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -69,7 +67,7 @@ export const ConvertToWarrantyModal: React.FC<ConvertToWarrantyModalProps> = ({
   const [benefits, setBenefits] = useState<string[]>([...defaultPkg.benefits]);
   const [newBenefitInput, setNewBenefitInput] = useState('');
   const [notes, setNotes] = useState<string>(
-    `Bệnh nhân hoàn thành liệu trình ${treatment.total} buổi (${treatment.bodyPart}). Chuyển sang gói bảo dưỡng định kỳ để duy trì trạng thái ổn định và phòng ngừa tái phát.`
+    `Bệnh nhân hoàn thành liệu trình ${treatment?.total || 15} buổi (${treatment?.bodyPart || ''}). Chuyển sang gói bảo dưỡng định kỳ để duy trì trạng thái ổn định và phòng ngừa tái phát.`
   );
   const [autoScheduleFirstSession, setAutoScheduleFirstSession] = useState<boolean>(true);
 
@@ -80,6 +78,8 @@ export const ConvertToWarrantyModal: React.FC<ConvertToWarrantyModalProps> = ({
     return d.toISOString().slice(0, 10);
   })();
   const [firstApptDate, setFirstApptDate] = useState<string>(defaultFirstApptDate);
+
+  if (!isOpen || !treatment) return null;
 
   const handleSelectTemplate = (tplId: string) => {
     setSelectedTemplateId(tplId);
