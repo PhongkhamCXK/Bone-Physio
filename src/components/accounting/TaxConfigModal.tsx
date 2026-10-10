@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TaxConfig } from '../../types';
-import { X, Settings, ShieldCheck, HelpCircle, Save } from 'lucide-react';
+import { X, Settings, ShieldCheck, HelpCircle, Save, CheckCircle2 } from 'lucide-react';
 
 interface TaxConfigModalProps {
   isOpen: boolean;
@@ -25,7 +25,30 @@ export const TaxConfigModal: React.FC<TaxConfigModalProps> = ({
     config.deductibleExpenseRatio ?? 100
   );
 
+  // Đồng bộ lại state mỗi khi mở modal hoặc config thay đổi
+  useEffect(() => {
+    if (isOpen) {
+      setTaxModel(config.taxModel || 'corporate_20');
+      setCitRate(config.citRate ?? 20);
+      setVatRate(config.vatRate ?? 0);
+      setHouseholdRate(config.householdRate ?? 2.0);
+      setDeductibleExpenseRatio(config.deductibleExpenseRatio ?? 100);
+    }
+  }, [isOpen, config]);
+
   if (!isOpen) return null;
+
+  const handleQuickApplyModel = (model: 'corporate_20' | 'household_lump_sum') => {
+    setTaxModel(model);
+    onSave({
+      taxModel: model,
+      citRate: Number(citRate),
+      vatRate: Number(vatRate),
+      householdRate: Number(householdRate),
+      deductibleExpenseRatio: Number(deductibleExpenseRatio),
+    });
+    onClose();
+  };
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,45 +96,77 @@ export const TaxConfigModal: React.FC<TaxConfigModalProps> = ({
               Mô Hình Tính Thuế Phòng Khám
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
+              <div
                 onClick={() => setTaxModel('corporate_20')}
-                className={`p-3.5 rounded-xl border text-left transition ${
+                className={`p-4 rounded-2xl border text-left transition cursor-pointer relative ${
                   taxModel === 'corporate_20'
-                    ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-600'
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/50 shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
                 }`}
               >
-                <div className="font-semibold text-sm text-slate-900 mb-1 flex items-center justify-between">
-                  <span>Phòng Khám / Công Ty Y Tế</span>
-                  {taxModel === 'corporate_20' && (
-                    <span className="w-2 h-2 rounded-full bg-blue-600" />
+                <div className="font-bold text-sm text-slate-900 mb-1 flex items-center justify-between">
+                  <span>🏢 Doanh Nghiệp Y Tế</span>
+                  {taxModel === 'corporate_20' ? (
+                    <span className="flex items-center space-x-1 text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Đang chọn</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleQuickApplyModel('corporate_20');
+                      }}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200"
+                    >
+                      Áp dụng ngay
+                    </button>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Thuế TNDN 20% trên lợi nhuận (Doanh thu - Chi phí có hóa đơn hợp lệ). VAT 0% khám chữa bệnh.
+                <p className="text-xs text-slate-500 leading-relaxed mb-2">
+                  Thuế TNDN 20% trên lợi nhuận tính thuế (Doanh thu - Chi phí có hóa đơn đỏ). VAT 0% khám chữa bệnh.
                 </p>
-              </button>
+                <div className="text-[11px] font-semibold text-blue-800">
+                  Phù hợp: Phòng khám quy mô công ty, chi phí thuê nhà và thiết bị lớn có hóa đơn VAT.
+                </div>
+              </div>
 
-              <button
-                type="button"
+              <div
                 onClick={() => setTaxModel('household_lump_sum')}
-                className={`p-3.5 rounded-xl border text-left transition ${
+                className={`p-4 rounded-2xl border text-left transition cursor-pointer relative ${
                   taxModel === 'household_lump_sum'
-                    ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-600'
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/50 shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
                 }`}
               >
-                <div className="font-semibold text-sm text-slate-900 mb-1 flex items-center justify-between">
-                  <span>Phòng Khám Khoán / Hộ KD</span>
-                  {taxModel === 'household_lump_sum' && (
-                    <span className="w-2 h-2 rounded-full bg-blue-600" />
+                <div className="font-bold text-sm text-slate-900 mb-1 flex items-center justify-between">
+                  <span>🏠 Thuế Khoán / Hộ KD</span>
+                  {taxModel === 'household_lump_sum' ? (
+                    <span className="flex items-center space-x-1 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Đang chọn</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleQuickApplyModel('household_lump_sum');
+                      }}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-300"
+                    >
+                      Áp dụng ngay
+                    </button>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Thuế khoán trực tiếp trên doanh thu (Thông tư 40/2021: 2% tổng doanh thu thu được).
+                <p className="text-xs text-slate-500 leading-relaxed mb-2">
+                  Thuế khoán trực tiếp trên doanh thu (Thông tư 40/2021: 2.0% trên tổng thu). Không cần chứng minh hóa đơn chi phí.
                 </p>
-              </button>
+                <div className="text-[11px] font-semibold text-emerald-800">
+                  Phù hợp: Hộ kinh doanh cá thể, phòng khám Bác sĩ tư nhân, sổ sách chi phí đơn giản.
+                </div>
+              </div>
             </div>
           </div>
 

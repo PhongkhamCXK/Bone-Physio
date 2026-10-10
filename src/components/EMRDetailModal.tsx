@@ -73,6 +73,8 @@ interface EMRDetailModalProps {
   onAddTreatment?: (treatment: Treatment, autoCreateAppointment?: boolean) => void;
   onNavigateToTreatments?: () => void;
   onOpenPatientPortal?: (patient: Patient) => void;
+  allPatients?: Patient[];
+  onSelectPatient?: (patient: Patient) => void;
 }
 
 export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
@@ -92,6 +94,8 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
   onAddTreatment,
   onNavigateToTreatments,
   onOpenPatientPortal,
+  allPatients = [],
+  onSelectPatient,
 }) => {
   const isDoctor = isDoctorUser(currentUser);
   const [isAddRegionOpen, setIsAddRegionOpen] = useState(false);
@@ -253,16 +257,42 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 flex-shrink-0">
             <div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                 <span className="px-2.5 py-1 bg-blue-100 text-blue-700 font-mono text-xs font-bold rounded-lg">
                   {patient.id}
                 </span>
                 <h2 className="text-xl font-bold text-slate-900">
                   Hồ Sơ EMR Chi Tiết: {patient.name}
                 </h2>
+                {allPatients && allPatients.length > 1 && onSelectPatient && (
+                  <select
+                    value={patient.id}
+                    onChange={(e) => {
+                      const target = allPatients.find((p) => p.id === e.target.value);
+                      if (target) onSelectPatient(target);
+                    }}
+                    className="ml-2 bg-slate-50 border border-slate-300 hover:border-blue-400 text-slate-800 text-xs font-semibold rounded-xl px-2.5 py-1 focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                    title="Chuyển nhanh sang bệnh nhân khác để xem bệnh án"
+                  >
+                    {allPatients.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.id}) - {p.bodyPart}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {patient.gender}, {patient.age} tuổi • SĐT: {patient.phone} • Ngày đầu khám: {patient.firstVisitDateTime || 'Chưa ghi'}
+              <p className="text-xs text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                <span>{patient.gender}, {patient.age} tuổi • SĐT: {patient.phone} • Ngày đầu khám: {patient.firstVisitDateTime || 'Chưa ghi'}</span>
+                <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold text-[11px] inline-flex items-center gap-1">
+                  <Stethoscope className="w-3 h-3 text-indigo-600" />
+                  <span>Bác sĩ EMR: {patient.attendingDoctor || patient.createdByDoctor || currentUser?.name || 'BS. CKII Hoàng Minh'}</span>
+                </span>
+                {patient.lastModifiedBy && (
+                  <span className="text-[10.5px] text-slate-400 italic">
+                    (Sửa bởi: {patient.lastModifiedBy} • {patient.lastModifiedAt || 'Hôm nay'})
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex items-center space-x-2">
@@ -1801,6 +1831,7 @@ export const EMRDetailModal: React.FC<EMRDetailModalProps> = ({
           isOpen={isEditEMROpen}
           onClose={() => setIsEditEMROpen(false)}
           initialPatient={patient}
+          currentUser={currentUser}
           onSave={(updated) => {
             onUpdatePatient(updated);
             setIsEditEMROpen(false);

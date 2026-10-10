@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Treatment, Patient, SessionSchedule, Staff, WarrantyRecord } from '../types';
+import { Treatment, Patient, SessionSchedule, Staff, WarrantyRecord, Technician, Invoice } from '../types';
 import { CopyProtocolModal } from './CopyProtocolModal';
 import { ScheduleTreatmentModal } from './ScheduleTreatmentModal';
 import { ConvertToWarrantyModal } from './ConvertToWarrantyModal';
 import { AttendanceRosterModal } from './AttendanceRosterModal';
+import { UpsellV2ConversionModal } from './UpsellV2ConversionModal';
 import {
   Plus,
   Copy,
@@ -33,6 +34,7 @@ import { smartSearchMatch } from '../utils/textUtils';
 interface TreatmentsTabProps {
   treatments: Treatment[];
   patients: Patient[];
+  technicians?: Technician[];
   staffList?: Staff[];
   warranties?: WarrantyRecord[];
   onAddTreatment: (treatment: Treatment, autoCreateAppointment?: boolean) => void;
@@ -45,12 +47,18 @@ interface TreatmentsTabProps {
     autoCreateAppointment: boolean,
     firstApptDate?: string
   ) => void;
+  onConvertToUpsellV2?: (
+    treatment: Treatment,
+    v2Treatment: Treatment,
+    v2Invoice: Invoice
+  ) => void;
   onNavigateToWarranty?: () => void;
 }
 
 export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
   treatments,
   patients,
+  technicians = [],
   staffList = [],
   warranties = [],
   onAddTreatment,
@@ -58,17 +66,20 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
   onDeleteTreatment,
   onOpenEMRByPatientId,
   onConvertToWarranty,
+  onConvertToUpsellV2,
   onNavigateToWarranty,
 }) => {
   const [search, setSearch] = useState('');
   const [copySuccessToast, setCopySuccessToast] = useState<string | null>(null);
   const [attendanceToast, setAttendanceToast] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [ktvFilter, setKtvFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [scheduleModalTreatment, setScheduleModalTreatment] = useState<Treatment | null>(null);
   const [attendanceModalTreatment, setAttendanceModalTreatment] = useState<Treatment | null>(null);
   const [warrantyModalTreatment, setWarrantyModalTreatment] = useState<Treatment | null>(null);
+  const [upsellV2ModalTreatment, setUpsellV2ModalTreatment] = useState<Treatment | null>(null);
   const [treatmentToDelete, setTreatmentToDelete] = useState<Treatment | null>(null);
 
   // Form state
@@ -89,6 +100,9 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
   const [autoCreateAppt, setAutoCreateAppt] = useState(true);
   const [status, setStatus] = useState<'Đang điều trị' | 'Hoàn thành' | 'Tạm dừng'>('Đang điều trị');
 
+  const defaultTechName = technicians[0]?.name || 'KTV. Lê Văn Sơn';
+  const [selectedTechnician, setSelectedTechnician] = useState<string>(defaultTechName);
+
   // 1-Click Điểm Danh nhanh buổi trị liệu hôm nay (+1 Buổi)
   const handleQuickCheckIn = (treatment: Treatment) => {
     if (treatment.done >= treatment.total) {
@@ -100,6 +114,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
     const nextNumber = treatment.done + 1;
     const todayDate = new Date().toISOString().split('T')[0];
     const nowStr = new Date().toLocaleString('vi-VN');
+    const assignedTech = treatment.technician || defaultTechName;
 
     let currentSessions = treatment.sessions || [];
     if (currentSessions.length < treatment.total) {
@@ -125,8 +140,8 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
           date: todayDate,
           clinicConfirmed: true,
           clinicConfirmedAt: nowStr,
-          technician: staffList[0]?.name || 'KTV. Trần Minh Long',
-          notes: s.notes || `Điểm danh làm dịch vụ buổi ${nextNumber} ngày ${todayDate}`,
+          technician: assignedTech,
+          notes: s.notes || `Điểm danh làm dịch vụ buổi ${nextNumber} ngày ${todayDate} (${assignedTech})`,
         };
       }
       return s;
@@ -137,13 +152,14 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
 
     const updated: Treatment = {
       ...treatment,
+      technician: assignedTech,
       done: newDone,
       status: newStatus,
       sessions: updatedSessions,
     };
 
     onUpdateTreatment(updated);
-    setAttendanceToast(`✓ Đã điểm danh Buổi ${nextNumber}/${treatment.total} cho BN ${treatment.patientName}!`);
+    setAttendanceToast(`✓ Đã điểm danh Buổi ${nextNumber}/${treatment.total} cho BN ${treatment.patientName} (KTV thực hiện: ${assignedTech})!`);
     setTimeout(() => setAttendanceToast(null), 3500);
   };
 
@@ -195,6 +211,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
 
     setRevisitNotes('Đánh giá lại tầm vận động (ROM), mức độ đau (VAS), điều chỉnh phác đồ');
     setRevisitDoctor('BS. CKII Hoàng Minh');
+    setSelectedTechnician(defaultTechName);
     setAutoCreateAppt(true);
     setStatus('Đang điều trị');
     setIsModalOpen(true);
@@ -214,6 +231,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
         'Đánh giá lại tầm vận động (ROM), mức độ đau (VAS), điều chỉnh phác đồ'
     );
     setRevisitDoctor(t.doctor || 'BS. CKII Hoàng Minh');
+    setSelectedTechnician(t.technician || defaultTechName);
     setAutoCreateAppt(true);
     setStatus(t.status);
     setIsModalOpen(true);
@@ -249,6 +267,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
           revisitDate: followupDate,
           revisitNotes,
           doctor: revisitDoctor,
+          technician: selectedTechnician,
           status,
         },
         true
@@ -266,6 +285,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
         revisitDate: followupDate,
         revisitNotes,
         doctor: revisitDoctor,
+        technician: selectedTechnician,
         status,
         addedFromEMR: false,
         sessions: Array.from({ length: Number(totalSessions) }, (_, i) => ({
@@ -313,6 +333,19 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
     return diff < 0;
   }).length;
 
+  // Cảnh báo bỏ dở liệu trình: Đang điều trị nhưng chưa xong và đã quá hạn khám/tập từ 2 ngày trở lên
+  const dropoutWarningCount = treatments.filter((t) => {
+    if (t.status !== 'Đang điều trị' || t.done >= t.total) return false;
+    const revDate = t.revisitDate || t.followup;
+    if (!revDate) return true;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const rev = new Date(revDate);
+    rev.setHours(0, 0, 0, 0);
+    const diff = Math.round((rev.getTime() - now.getTime()) / 86400000);
+    return diff <= -2;
+  }).length;
+
   // Finished treatments ready to transition to warranty
   const completedWithoutWarranty = treatments.filter(
     (t) =>
@@ -349,11 +382,20 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
       matchStatus = diffDays !== null && diffDays >= 0 && diffDays <= 3;
     } else if (statusFilter === 'overdue') {
       matchStatus = diffDays !== null && diffDays < 0;
+    } else if (statusFilter === 'dropout_warning') {
+      matchStatus = t.status === 'Đang điều trị' && t.done < t.total && (diffDays === null || diffDays <= -2);
     } else if (statusFilter !== 'all') {
       matchStatus = t.status === statusFilter;
     }
 
-    return matchQuery && matchStatus;
+    let matchKtv = true;
+    if (ktvFilter !== 'all') {
+      matchKtv =
+        t.technician === ktvFilter ||
+        (t.sessions?.some((s) => s.technician === ktvFilter) ?? false);
+    }
+
+    return matchQuery && matchStatus && matchKtv;
   });
 
   const inProgressCount = treatments.filter((t) => t.done < t.total).length;
@@ -447,6 +489,98 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
       )}
 
       {/* Filter and search bar */}
+      {/* Phân Bổ Kỹ Thuật Viên (KTV) Thực Hiện Liệu Trình */}
+      <div className="bg-gradient-to-r from-teal-50 via-emerald-50 to-blue-50 p-4 sm:p-5 rounded-3xl border border-teal-200/80 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <span className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold">
+              <UserCheck className="w-4 h-4" />
+            </span>
+            <div>
+              <h3 className="text-xs font-bold text-teal-950 uppercase tracking-wider">
+                Phân Bổ Kỹ Thuật Viên (KTV) Thực Hiện Liệu Trình
+              </h3>
+              <p className="text-[11px] text-teal-700">
+                Hiển thị KTV làm trực tiếp từng ca điều trị • Bấm thẻ KTV để lọc nhanh danh sách
+              </p>
+            </div>
+          </div>
+          {ktvFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setKtvFilter('all')}
+              className="text-xs font-bold text-teal-700 hover:text-teal-900 underline flex items-center gap-1 cursor-pointer"
+            >
+              ✕ Bỏ lọc (Xem tất cả KTV)
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {(technicians.length > 0 ? technicians : [
+            { id: 'ktv1', name: 'KTV. Lê Văn Sơn', techType: 'Vận động' as const, status: 'Đang làm việc' as const },
+            { id: 'ktv2', name: 'KTV. Trần Minh Đức', techType: 'Máy' as const, status: 'Đang làm việc' as const },
+            { id: 'ktv3', name: 'KTV. Phạm Quang Huy', techType: 'Tay' as const, status: 'Đang làm việc' as const },
+          ]).map((ktv) => {
+            const assigned = treatments.filter((t) => t.technician === ktv.name);
+            const active = assigned.filter((t) => t.status === 'Đang điều trị');
+            const doneSessions = assigned.reduce((sum, t) => sum + (t.done || 0), 0);
+            const isSelected = ktvFilter === ktv.name;
+
+            return (
+              <div
+                key={ktv.id}
+                onClick={() => setKtvFilter(isSelected ? 'all' : ktv.name)}
+                className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                  isSelected
+                    ? 'bg-teal-600 text-white border-teal-700 shadow-md scale-[1.02]'
+                    : 'bg-white hover:bg-teal-50/80 border-teal-200/70 text-slate-800 shadow-2xs'
+                }`}
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="font-extrabold text-xs">{ktv.name}</span>
+                    <span
+                      className={`text-[9.5px] px-1.5 py-0.2 rounded font-bold ${
+                        isSelected
+                          ? 'bg-white/20 text-white'
+                          : 'bg-teal-100 text-teal-800'
+                      }`}
+                    >
+                      {ktv.techType}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[11px] block ${
+                      isSelected ? 'text-teal-100' : 'text-slate-500'
+                    }`}
+                  >
+                    Phụ trách: <strong>{assigned.length} ca</strong> ({active.length} đang làm)
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span
+                    className={`text-base font-black block ${
+                      isSelected ? 'text-white' : 'text-teal-700'
+                    }`}
+                  >
+                    {doneSessions}
+                  </span>
+                  <span
+                    className={`text-[10px] ${
+                      isSelected ? 'text-teal-100' : 'text-slate-400'
+                    }`}
+                  >
+                    buổi đã làm
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Filter and search bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
         <div className="relative w-full sm:w-80">
           <input
@@ -459,19 +593,43 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
         </div>
 
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* Lọc theo KTV */}
+          <select
+            value={ktvFilter}
+            onChange={(e) => setKtvFilter(e.target.value)}
+            className="px-3 py-2 bg-teal-50/70 border border-teal-300 rounded-xl text-xs font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          >
+            <option value="all">👨‍⚕️ Tất cả KTV ({treatments.length} ca)</option>
+            {technicians.map((ktv) => (
+              <option key={ktv.id} value={ktv.name}>
+                {ktv.name} ({ktv.techType})
+              </option>
+            ))}
+            {technicians.length === 0 && (
+              <>
+                <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
+              </>
+            )}
+          </select>
+
+          {/* Lọc theo Trạng thái & Khám nhắc */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">Tất cả ({treatments.length})</option>
+            <option value="all">Tất cả trạng thái ({treatments.length})</option>
+            <option value="dropout_warning">🚨 Cảnh báo bỏ liệu trình / Quá hạn ({dropoutWarningCount})</option>
             <option value="due_3days">🔔 Có lịch khám nhắc 3 ngày tới ({due3DaysCount})</option>
             <option value="overdue">⚠️ Lịch khám nhắc đã quá hạn ({overdueCount})</option>
             <option value="Đang điều trị">Đang điều trị</option>
             <option value="Hoàn thành">Hoàn thành</option>
             <option value="Tạm dừng">Tạm dừng</option>
           </select>
+
           <span className="text-xs text-slate-500 font-medium">
             ({filtered.length} kết quả)
           </span>
@@ -486,7 +644,13 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
               <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 <th className="py-4 px-5">Mã & Bệnh Nhân</th>
                 <th className="py-4 px-5">Vùng Điều Trị</th>
-                <th className="py-4 px-5">Phác Đồ Bác Sĩ Chỉ Định (EMR)</th>
+                <th className="py-4 px-5">Phác Đồ & Bác Sĩ Chỉ Định</th>
+                <th className="py-4 px-5">
+                  <div className="flex items-center space-x-1.5 text-teal-700">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>KTV Trực Tiếp Làm</span>
+                  </div>
+                </th>
                 <th className="py-4 px-5">
                   <div className="flex items-center space-x-1.5 text-blue-700">
                     <UserCheck className="w-3.5 h-3.5" />
@@ -555,15 +719,16 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
 
                       {/* Phác Đồ Bác Sĩ Chỉ Định (EMR) */}
                       <td className="py-4 px-5 max-w-xs">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <p className="text-slate-800 font-bold line-clamp-2 leading-relaxed text-xs">
                             {t.plan}
                           </p>
                           <div className="flex items-center gap-1.5 flex-wrap text-[10.5px]">
-                            <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                            <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1" title="Bác sĩ chỉ định phác đồ">
                               <Stethoscope className="w-3 h-3 text-indigo-600" />
-                              <span>{t.doctor || 'BS. CKII Hoàng Minh'}</span>
+                              <span>BS: {t.doctor || 'BS. CKII Hoàng Minh'}</span>
                             </span>
+
                             {t.patientId && onOpenEMRByPatientId && (
                               <button
                                 type="button"
@@ -575,6 +740,55 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                               </button>
                             )}
                           </div>
+                        </div>
+                      </td>
+
+                      {/* CỘT MỚI: KTV TRỰC TIẾP LÀM (ĐỒNG BỘ DỮ LIỆU) */}
+                      <td className="py-4 px-5">
+                        <div className="space-y-1.5 min-w-[170px]">
+                          <div className="flex items-center space-x-1">
+                            <span className="w-5 h-5 rounded-md bg-teal-100 text-teal-800 flex items-center justify-center font-bold flex-shrink-0">
+                              <UserCheck className="w-3 h-3 text-teal-700" />
+                            </span>
+                            <select
+                              value={t.technician || defaultTechName}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                onUpdateTreatment({ ...t, technician: e.target.value });
+                                setAttendanceToast(`Đã phân công ${e.target.value} làm KTV cho ${t.patientName}`);
+                                setTimeout(() => setAttendanceToast(null), 3000);
+                              }}
+                              className="text-xs font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-2xs w-full"
+                              title="Bấm để phân công hoặc đổi Kỹ thuật viên (KTV) trực tiếp làm liệu trình này"
+                            >
+                              {technicians.map((ktv) => (
+                                <option key={ktv.id} value={ktv.name}>
+                                  {ktv.name} ({ktv.techType})
+                                </option>
+                              ))}
+                              {!technicians.some((k) => k.name === t.technician) && t.technician && (
+                                <option value={t.technician}>{t.technician}</option>
+                              )}
+                              {technicians.length === 0 && (
+                                <>
+                                  <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                                  <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                                  <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
+                                </>
+                              )}
+                            </select>
+                          </div>
+
+                          {/* Buổi gần nhất KTV đã làm / đang phụ trách */}
+                          {t.sessions && t.sessions.some((s) => s.completed) ? (
+                            <span className="text-[10px] text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md block truncate font-medium">
+                              ✓ Buổi {t.done}: {t.sessions.filter((s) => s.completed).slice(-1)[0]?.technician || t.technician || defaultTechName} làm
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic block">
+                              Chưa làm buổi nào (Chờ điểm danh)
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -622,9 +836,26 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                               {diffDays !== null && (
                                 <>
                                   {diffDays < 0 && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
-                                      Quá hạn {Math.abs(diffDays)} ngày
-                                    </span>
+                                    <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                        Quá hạn {Math.abs(diffDays)} ngày
+                                      </span>
+                                      {diffDays <= -2 && t.done < t.total && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const msg = `Kính gửi ${t.patientName}, Phòng khám Bone Physio xin nhắc bạn lịch tập buổi tiếp theo (${t.done + 1}/${t.total} buổi ${t.bodyPart}) để duy trì hiệu quả phục hồi và tránh tái phát!`;
+                                            if (navigator.clipboard) navigator.clipboard.writeText(msg);
+                                            setAttendanceToast(`📋 Đã sao chép tin nhắn nhắc lịch tập Zalo cho BN ${t.patientName}!`);
+                                            setTimeout(() => setAttendanceToast(null), 3500);
+                                          }}
+                                          className="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded text-[9.5px] font-extrabold transition cursor-pointer flex items-center gap-0.5 shadow-2xs"
+                                          title="Bấm để sao chép tin nhắn nhắc lịch gửi Zalo/SMS cho bệnh nhân"
+                                        >
+                                          <span>📞 Nhắc Zalo</span>
+                                        </button>
+                                      )}
+                                    </div>
                                   )}
                                   {diffDays === 0 && (
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
@@ -736,7 +967,20 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                             )
                           )}
 
-                          {/* 4. NÚT MỞ EMR BÁC SĨ (ĐỂ ĐỔI PHÁC ĐỒ / SỐ BUỔI CHUẨN Y KHOA) */}
+                          {/* 4. NÚT CHUYỂN ĐỔI LIỆU TRÌNH VÒNG 2 (UPSELL V2 CHUẨN CFO) */}
+                          {(t.done >= 6 || isFinished) && (
+                            <button
+                              type="button"
+                              onClick={() => setUpsellV2ModalTreatment(t)}
+                              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 transition shadow-sm active:scale-95 cursor-pointer"
+                              title="Kích hoạt chuyển đổi sang Liệu trình Phục hồi Vòng 2 (Upsell V2) theo kế hoạch CFO"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+                              <span>Chuyển Gói V2</span>
+                            </button>
+                          )}
+
+                          {/* 5. NÚT MỞ EMR BÁC SĨ (ĐỂ ĐỔI PHÁC ĐỒ / SỐ BUỔI CHUẨN Y KHOA) */}
                           {t.patientId && onOpenEMRByPatientId && (
                             <button
                               type="button"
@@ -1049,6 +1293,40 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
                 </select>
               </div>
 
+              {/* KTV Phụ trách / Thực hiện */}
+              <div className="bg-teal-50/70 p-3.5 rounded-2xl border border-teal-200 space-y-1.5">
+                <label className="block text-xs font-bold text-teal-950 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Kỹ Thuật Viên (KTV) Phụ Trách Thực Hiện</span>
+                  </span>
+                  <span className="text-[10px] text-teal-700 bg-teal-100 px-2 py-0.5 rounded font-bold">
+                    Đồng bộ dữ liệu KTV
+                  </span>
+                </label>
+                <select
+                  value={selectedTechnician}
+                  onChange={(e) => setSelectedTechnician(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-teal-300 rounded-xl text-xs font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                >
+                  {technicians.map((ktv) => (
+                    <option key={ktv.id} value={ktv.name}>
+                      {ktv.name} ({ktv.techType}) • {ktv.status}
+                    </option>
+                  ))}
+                  {technicians.length === 0 && (
+                    <>
+                      <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                      <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                      <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
+                    </>
+                  )}
+                </select>
+                <p className="text-[10.5px] text-teal-700 italic">
+                  * KTV được chọn sẽ tự động ghi nhận vào sổ điểm danh từng buổi và đồng bộ trạng thái ca làm việc.
+                </p>
+              </div>
+
               <div className="flex justify-end space-x-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -1087,6 +1365,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
               p.name === scheduleModalTreatment.patientName
           )}
           isOpen={!!scheduleModalTreatment}
+          technicians={technicians}
           onClose={() => setScheduleModalTreatment(null)}
           onSaveSchedule={(updated, autoCreate, revDate, revNotes, revDoc) => {
             onUpdateTreatment(updated, true);
@@ -1113,6 +1392,30 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
           }}
         />
       )}
+
+      {/* Modal Chuyển Đổi Sang Liệu Trình Vòng 2 (Upsell V2 Chuẩn CFO) */}
+      {upsellV2ModalTreatment && (
+        <UpsellV2ConversionModal
+          isOpen={!!upsellV2ModalTreatment}
+          onClose={() => setUpsellV2ModalTreatment(null)}
+          treatment={upsellV2ModalTreatment}
+          patient={patients.find(
+            (p) =>
+              p.id === upsellV2ModalTreatment.patientId ||
+              p.name === upsellV2ModalTreatment.patientName
+          )}
+          doctors={staffList}
+          technicians={technicians}
+          onConfirm={(v2Treatment, v2Invoice) => {
+            if (onConvertToUpsellV2) {
+              onConvertToUpsellV2(upsellV2ModalTreatment, v2Treatment, v2Invoice);
+            } else {
+              onAddTreatment(v2Treatment);
+            }
+          }}
+        />
+      )}
+
       {/* Modal Xác Nhận Xóa Liệu Trình */}
       {treatmentToDelete && (
         <ConfirmModal
@@ -1150,6 +1453,7 @@ export const TreatmentsTab: React.FC<TreatmentsTabProps> = ({
               p.id === attendanceModalTreatment.patientId ||
               p.name === attendanceModalTreatment.patientName
           )}
+          technicians={technicians}
           staffList={staffList}
           onClose={() => setAttendanceModalTreatment(null)}
           onSaveAttendance={(updatedTreatment) => {

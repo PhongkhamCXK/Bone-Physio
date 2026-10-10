@@ -14,6 +14,7 @@ import {
   WarrantyRecord,
   SessionSchedule,
   RoleStandardTreatment,
+  TourItem,
 } from './types';
 import {
   INITIAL_PATIENTS,
@@ -26,6 +27,7 @@ import {
   INITIAL_EXPENSES,
   INITIAL_WARRANTIES,
   INITIAL_ROLE_STANDARD_TREATMENTS,
+  INITIAL_TOURS,
   uid,
 } from './data/seedData';
 import { exportBothExcelAndJson } from './utils/exportUtils';
@@ -131,12 +133,57 @@ export const ensurePatientExercises = (pts: Patient[]): Patient[] => {
     ]);
     const treatmentPlan = p.treatmentPlan || initMatch?.treatmentPlan;
 
+    // Phục hồi và cá nhân hóa chính xác chỉ số lâm sàng EMR theo từng bệnh nhân
+    const bpText = (p.bodyPart || '').toLowerCase();
+    const healthMetrics =
+      p.healthMetrics && p.healthMetrics.length >= 2 && p.healthMetrics[0]?.muscleStrength
+        ? p.healthMetrics
+        : initMatch?.healthMetrics && initMatch.healthMetrics.length > 0
+        ? initMatch.healthMetrics
+        : p.healthMetrics && p.healthMetrics.length > 0
+        ? p.healthMetrics
+        : [
+            {
+              id: `HM_${p.id}_INIT`,
+              date: p.firstVisitDateTime ? p.firstVisitDateTime.split(' ')[0] : '2026-10-01',
+              painScore: bpText.includes('lưng') || bpText.includes('vai') ? 6 : bpText.includes('gối') ? 5 : 4,
+              rangeOfMotion: bpText.includes('gối')
+                ? 'Gập gối 105 độ (hạn chế 30 độ)'
+                : bpText.includes('vai')
+                ? 'Dang vai 85 độ (đau chói khớp)'
+                : bpText.includes('cổ')
+                ? 'Xoay nghiêng cổ hạn chế 25%'
+                : 'Cúi ngửa thắt lưng hạn chế 35%',
+              muscleStrength: bpText.includes('gối') ? '3+/5 (Teo nhẹ cơ tứ đầu)' : '4/5',
+              bloodPressure: p.age && p.age >= 60 ? '135/85 mmHg' : '120/80 mmHg',
+              heartRate: p.age && p.age >= 60 ? '78 bpm' : '74 bpm',
+              spo2: '98%',
+              weight: p.gender === 'Nam' ? 68 : 55,
+              height: p.gender === 'Nam' ? 170 : 158,
+              bmi: p.gender === 'Nam' ? '23.5' : '22.0',
+              functionalScore: bpText.includes('lưng') ? 'ODI 26% (Mức độ vừa)' : bpText.includes('gối') ? 'KOOS 62/100' : 'QuickDASH 32%',
+              jointCircumference: bpText.includes('gối') ? '38.5 cm (Tràn dịch nhẹ)' : bpText.includes('vai') ? '34 cm' : '36 cm',
+              notes: `Chỉ số khám lâm sàng khởi đầu của ${p.name} - Chẩn đoán: ${p.diagnosis}`,
+            },
+          ];
+
+    const dailyChecklist =
+      p.dailyChecklist && p.dailyChecklist.length > 0
+        ? p.dailyChecklist
+        : initMatch?.dailyChecklist || [];
+
     return {
       ...p,
       assignedExercises: assigned,
       auditLogs,
       modalities,
       treatmentPlan,
+      healthMetrics,
+      dailyChecklist,
+      dietPlan: p.dietPlan || initMatch?.dietPlan,
+      treatmentSessions: p.treatmentSessions || initMatch?.treatmentSessions || 21,
+      salesStaff: p.salesStaff || initMatch?.salesStaff || 'Nguyễn Thị Thảo',
+      salesSource: p.salesSource || initMatch?.salesSource || 'Tư vấn trực tiếp',
     };
   });
 };
@@ -198,7 +245,10 @@ export default function App() {
         const parsed: Staff[] = JSON.parse(saved);
         const hasTrang = parsed.some((s) => s.username === 'Trang');
         const hastrang = parsed.some((s) => s.username === 'trang');
-        if (!hasTrang || !hastrang) {
+        const hasThao = parsed.some((s) => s.username === 'thao');
+        const hasYen = parsed.some((s) => s.username === 'yen');
+        const hasHoa = parsed.some((s) => s.username === 'hoa');
+        if (!hasTrang || !hastrang || !hasThao || !hasYen || !hasHoa) {
           const merged = [...parsed];
           if (!hasTrang) {
             merged.push({
@@ -222,6 +272,39 @@ export default function App() {
               protected: false,
             });
           }
+          if (!hasThao) {
+            merged.push({
+              id: 'staff_sales_thao',
+              username: 'thao',
+              password: '123',
+              name: 'Nguyễn Thị Thảo',
+              role: 'sales',
+              title: 'Chuyên Viên Tư Vấn & Phát Triển Khách Hàng (Sale Lead)',
+              protected: false,
+            });
+          }
+          if (!hasYen) {
+            merged.push({
+              id: 'staff_sales_yen',
+              username: 'yen',
+              password: '123',
+              name: 'Trần Bảo Yến',
+              role: 'sales',
+              title: 'Chuyên Viên Sale Tư Vấn Liệu Trình',
+              protected: false,
+            });
+          }
+          if (!hasHoa) {
+            merged.push({
+              id: 'staff_accountant_hoa',
+              username: 'hoa',
+              password: '123',
+              name: 'Phạm Thanh Hoa',
+              role: 'accountant',
+              title: 'Kế Toán Trưởng & Đối Soát KPI Doanh Thu',
+              protected: false,
+            });
+          }
           return merged;
         }
         return parsed;
@@ -240,6 +323,16 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bp_role_standard_treatments', JSON.stringify(roleStandardTreatments));
   }, [roleStandardTreatments]);
+
+  // Tours & Post-session Tour Reports State
+  const [tours, setTours] = useState<TourItem[]>(() => {
+    const saved = localStorage.getItem('bp_tours');
+    return saved ? JSON.parse(saved) : INITIAL_TOURS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('bp_tours', JSON.stringify(tours));
+  }, [tours]);
 
   const [expenses, setExpenses] = useState<Expense[]>(() => {
     const saved = localStorage.getItem('bp_expenses');
@@ -279,6 +372,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedEMRPatient, setSelectedEMRPatient] = useState<Patient | null>(null);
   const [selectedPortalPatientId, setSelectedPortalPatientId] = useState<string>('');
+  const [patientPortalSubTab, setPatientPortalSubTab] = useState<'checklist' | 'overview' | 'exercises' | 'warranty'>('checklist');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isKPISimulatorOpen, setIsKPISimulatorOpen] = useState(false);
   const [isCheckInOutModalOpen, setIsCheckInOutModalOpen] = useState(false);
@@ -805,23 +899,73 @@ export default function App() {
       });
   };
 
-  // Patient handlers
+  // Patient handlers - USER REQUIREMENT: TỰ ĐỘNG GHI TÊN BÁC SĨ ĐANG ĐĂNG NHẬP VÀO BỆNH ÁN EMR
   const handleAddPatient = (patient: Patient) => {
-    setPatients((prev) => [patient, ...prev]);
-    showToast(`Đã thêm hồ sơ bệnh nhân ${patient.name} (${patient.id})`, 'info');
+    const doctorName = currentUser?.name || patient.attendingDoctor || 'BS. CKII Hoàng Minh';
+    const doctorTitle = currentUser?.title || 'Bác sĩ phụ trách';
+    const nowStr = new Date().toLocaleString('vi-VN');
+
+    const withDoctor: Patient = {
+      ...patient,
+      attendingDoctor: patient.attendingDoctor || doctorName,
+      createdByDoctor: patient.createdByDoctor || doctorName,
+      lastModifiedBy: doctorName,
+      lastModifiedAt: nowStr,
+      revisitDoctor: patient.revisitDoctor || doctorName,
+      auditLogs: [
+        {
+          id: uid('log'),
+          timestamp: nowStr,
+          performedBy: doctorName,
+          role: doctorTitle,
+          action: 'Tạo mới hồ sơ bệnh án EMR',
+          details: `Bác sĩ ${doctorName} (${doctorTitle}) đã khởi tạo bệnh án EMR cho bệnh nhân ${patient.name}.`,
+          treatmentPlan: patient.treatmentPlan,
+          bodyPart: patient.bodyPart,
+        },
+        ...(patient.auditLogs || []),
+      ],
+    };
+
+    setPatients((prev) => [withDoctor, ...prev]);
+    showToast(`Đã thêm bệnh án BN ${withDoctor.name} (Bác sĩ: ${doctorName})`, 'info');
     if (getSupabaseConfig().isConfigured) {
-      handleSyncResult(supabaseSavePatient(patient), 'Lưu bệnh nhân', patient.name, true);
+      handleSyncResult(supabaseSavePatient(withDoctor), 'Lưu bệnh nhân', withDoctor.name, true);
     }
   };
 
   const handleUpdatePatient = (patient: Patient) => {
-    setPatients((prev) => prev.map((p) => (p.id === patient.id ? patient : p)));
-    if (selectedEMRPatient?.id === patient.id) {
-      setSelectedEMRPatient(patient);
+    const doctorName = currentUser?.name || patient.attendingDoctor || 'BS. CKII Hoàng Minh';
+    const doctorTitle = currentUser?.title || 'Bác sĩ phụ trách';
+    const nowStr = new Date().toLocaleString('vi-VN');
+
+    const withDoctor: Patient = {
+      ...patient,
+      attendingDoctor: patient.attendingDoctor || doctorName,
+      lastModifiedBy: doctorName,
+      lastModifiedAt: nowStr,
+      auditLogs: [
+        {
+          id: uid('log'),
+          timestamp: nowStr,
+          performedBy: doctorName,
+          role: doctorTitle,
+          action: 'Chỉnh sửa / Cập nhật hồ sơ bệnh án EMR',
+          details: `Bác sĩ ${doctorName} (${doctorTitle}) đã cập nhật bệnh án EMR cho bệnh nhân ${patient.name}.`,
+          treatmentPlan: patient.treatmentPlan,
+          bodyPart: patient.bodyPart,
+        },
+        ...(patient.auditLogs || []),
+      ],
+    };
+
+    setPatients((prev) => prev.map((p) => (p.id === withDoctor.id ? withDoctor : p)));
+    if (selectedEMRPatient?.id === withDoctor.id) {
+      setSelectedEMRPatient(withDoctor);
     }
-    showToast(`Đã cập nhật hồ sơ bệnh nhân ${patient.name}`, 'info');
+    showToast(`Đã cập nhật bệnh án BN ${withDoctor.name} (Bác sĩ: ${doctorName})`, 'info');
     if (getSupabaseConfig().isConfigured) {
-      handleSyncResult(supabaseSavePatient(patient), 'Cập nhật bệnh nhân', patient.name);
+      handleSyncResult(supabaseSavePatient(withDoctor), 'Cập nhật bệnh nhân', withDoctor.name);
     }
   };
 
@@ -1061,6 +1205,23 @@ export default function App() {
       `🎉 Liệu trình đã hoàn thành! Đã kích hoạt Gói Bảo Hành cho khách hàng ${treatment.patientName}.`
     );
     setActiveTab('warranty');
+  };
+
+  // Transition/Upsell to Round 2 Treatment (Upsell V2) & Invoice creation
+  const handleConvertToUpsellV2 = (
+    originTreatment: Treatment,
+    v2Treatment: Treatment,
+    v2Invoice: Invoice
+  ) => {
+    setTreatments((prev) => [v2Treatment, ...prev]);
+    setInvoices((prev) => [v2Invoice, ...prev]);
+    showToast(
+      `🎉 Chuyển đổi thành công sang Liệu trình Vòng 2 cho ${v2Treatment.patientName} & đã tạo Hóa đơn #${v2Invoice.id}`
+    );
+    if (getSupabaseConfig().isConfigured) {
+      handleSyncResult(supabaseSaveTreatment(v2Treatment), 'Lưu Liệu trình Vòng 2', v2Treatment.patientName);
+      handleSyncResult(supabaseSaveInvoice(v2Invoice), 'Lưu Hóa đơn Vòng 2', v2Invoice.id);
+    }
   };
 
   // KEY REQUIREMENT 2: EMR "Add new region" -> automatically adds to Treatments tab
@@ -1303,6 +1464,22 @@ export default function App() {
     showToast('Đã xóa điều trị chuẩn.');
   };
 
+  // Tour Handlers
+  const handleAddTour = (tour: TourItem) => {
+    setTours((prev) => [tour, ...prev]);
+    showToast(`Đã lưu báo cáo Tour sau làm (${tour.patientName})`);
+  };
+
+  const handleUpdateTour = (updated: TourItem) => {
+    setTours((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    showToast(`Đã cập nhật báo cáo Tour sau làm cho ${updated.patientName}`);
+  };
+
+  const handleDeleteTour = (id: string) => {
+    setTours((prev) => prev.filter((t) => t.id !== id));
+    showToast('Đã xóa phiếu tour.');
+  };
+
   // Staff handlers
   const handleAddStaff = (staff: Staff) => {
     setStaffList((prev) => [staff, ...prev]);
@@ -1464,8 +1641,12 @@ export default function App() {
         activeTab={activeTab}
         onSelectTab={(tab) => {
           setActiveTab(tab);
-          if (tab === 'patient-portal') {
-            window.dispatchEvent(new CustomEvent('bp_scroll_to_emr'));
+          if (tab === 'patient-portal' || tab === 'patient-checklist') {
+            setPatientPortalSubTab('checklist');
+          } else if (tab === 'patient-exercises') {
+            setPatientPortalSubTab('exercises');
+          } else if (tab === 'patient-warranty') {
+            setPatientPortalSubTab('warranty');
           }
         }}
         currentUser={currentUser}
@@ -1553,6 +1734,7 @@ export default function App() {
                 warranties={warranties}
                 invoices={invoices}
                 exercises={exercises}
+                currentUser={currentUser}
                 onAddPatient={handleAddPatient}
                 onUpdatePatient={handleUpdatePatient}
                 onDeletePatient={handleDeletePatient}
@@ -1565,12 +1747,14 @@ export default function App() {
               <TreatmentsTab
                 treatments={treatments}
                 patients={patients}
+                technicians={technicians}
                 staffList={staffList}
                 warranties={warranties}
                 onAddTreatment={handleAddTreatment}
                 onUpdateTreatment={handleUpdateTreatment}
                 onDeleteTreatment={handleDeleteTreatment}
                 onConvertToWarranty={handleConvertToWarranty}
+                onConvertToUpsellV2={handleConvertToUpsellV2}
                 onNavigateToWarranty={() => setActiveTab('warranty')}
                 onOpenEMRByPatientId={(pId) => {
                   const p = patients.find((item) => item.id === pId);
@@ -1665,8 +1849,14 @@ export default function App() {
             {activeTab === 'care' && (
               <CustomerCareTab
                 patients={patients}
+                staffList={staffList}
+                invoices={invoices}
                 onOpenEMR={(p) => setSelectedEMRPatient(p)}
                 onNavigateTab={(tab) => setActiveTab(tab)}
+                onUpdatePatient={handleUpdatePatient}
+                onAddPatient={handleAddPatient}
+                onAddTreatment={handleAddTreatment}
+                onAddInvoice={handleAddInvoice}
               />
             )}
 
@@ -1674,14 +1864,24 @@ export default function App() {
               <TechniciansTab
                 technicians={technicians}
                 appointments={appointments}
+                treatments={treatments}
+                patients={patients}
+                invoices={invoices}
+                staffList={staffList}
                 roleStandardTreatments={roleStandardTreatments}
+                tours={tours}
                 onAddTechnician={handleAddTechnician}
                 onUpdateTechnician={handleUpdateTechnician}
                 onDeleteTechnician={handleDeleteTechnician}
                 onUpdateRoleStandardTreatment={handleUpdateRoleStandardTreatment}
                 onAddRoleStandardTreatment={handleAddRoleStandardTreatment}
                 onDeleteRoleStandardTreatment={handleDeleteRoleStandardTreatment}
+                onAddTour={handleAddTour}
+                onUpdateTour={handleUpdateTour}
+                onDeleteTour={handleDeleteTour}
+                onConvertToUpsellV2={handleConvertToUpsellV2}
                 onOpenQuickCheckInOut={() => setIsCheckInOutModalOpen(true)}
+                onNavigateTab={(tab) => setActiveTab(tab)}
                 currentUser={currentUser}
               />
             )}
@@ -1729,6 +1929,7 @@ export default function App() {
               activeTab === 'patient-warranty') &&
               activePortalPatient && (
                 <PatientPortalTab
+                  key={activePortalPatient.id}
                   patient={activePortalPatient}
                   treatments={treatments}
                   appointments={appointments}
@@ -1738,16 +1939,9 @@ export default function App() {
                   allPatients={patients}
                   onSelectPatient={(p) => setSelectedPortalPatientId(p.id)}
                   onOpenEMR={(p) => setSelectedEMRPatient(p)}
-                  initialTab={
-                    activeTab === 'patient-checklist'
-                      ? 'checklist'
-                      : activeTab === 'patient-warranty'
-                      ? 'warranty'
-                      : activeTab === 'patient-exercises'
-                      ? 'exercises'
-                      : 'overview'
-                  }
-                  onSwitchTab={(tab) =>
+                  initialTab={patientPortalSubTab}
+                  onSwitchTab={(tab) => {
+                    setPatientPortalSubTab(tab);
                     setActiveTab(
                       tab === 'warranty'
                         ? 'patient-warranty'
@@ -1756,8 +1950,8 @@ export default function App() {
                         : tab === 'checklist'
                         ? 'patient-checklist'
                         : 'patient-portal'
-                    )
-                  }
+                    );
+                  }}
                   onRequestMaintenanceAppt={(patientName, service, date) => {
                     const newAppt: Appointment = {
                       id: uid('LH'),
@@ -1785,6 +1979,7 @@ export default function App() {
       {/* Global EMR Modal with "Add New Region" auto-sync to Treatments */}
       {selectedEMRPatient && (
         <EMRDetailModal
+          key={selectedEMRPatient.id}
           patient={selectedEMRPatient}
           isOpen={!!selectedEMRPatient}
           onClose={() => setSelectedEMRPatient(null)}
@@ -1818,6 +2013,8 @@ export default function App() {
             setSelectedEMRPatient(null);
             setActiveTab('patient-checklist');
           }}
+          allPatients={patients}
+          onSelectPatient={(p) => setSelectedEMRPatient(p)}
         />
       )}
 
@@ -1830,6 +2027,16 @@ export default function App() {
         invoices={invoices}
         expenses={expenses}
         taxConfig={taxConfig}
+        staffList={staffList}
+        technicians={technicians}
+        tours={tours}
+        appointments={appointments}
+        onUpdateInvoice={handleUpdateInvoice}
+        onUpdateInvoicesBatch={(updatedList) => {
+          setInvoices(updatedList);
+          localStorage.setItem('bp_invoices', JSON.stringify(updatedList));
+        }}
+        onShowToast={showToast}
       />
 
       {/* Centralized Check-in / Check-out Reception & Attendance Modal */}

@@ -84,11 +84,14 @@ export interface Treatment {
   regionId?: string;
   notes?: string;
   doctor?: string; // Bác sĩ phụ trách / chỉ định khám nhắc
+  technician?: string; // Kỹ thuật viên (KTV) phụ trách / thực hiện chính của liệu trình
   revisitDate?: string; // Ngày khám nhắc của Bác sĩ (YYYY-MM-DD)
   revisitNotes?: string; // Ghi chú chỉ định ngày khám nhắc
   autoCreateAppointment?: boolean;
   warrantyId?: string; // ID gói bảo hành được kích hoạt sau khi xong liệu trình
   modalities?: string[]; // Các phương pháp / máy móc trị liệu bác sĩ chỉ định
+  isUpsellV2?: boolean; // Liệu trình Vòng 2 chuyển đổi từ V1
+  parentTreatmentId?: string; // ID liệu trình gốc Vòng 1
 }
 
 export interface ProtocolTemplate {
@@ -119,6 +122,7 @@ export interface Appointment {
   patientId?: string;
   patientName: string;
   phone: string;
+  email?: string; // Địa chỉ email bệnh nhân nhận thông báo nhắc hẹn
   time: string; // Ngày giờ khám (VD: 2026-09-21 14:30 hoặc 14:30 - Hôm nay)
   date?: string;
   doctor: string;
@@ -226,6 +230,7 @@ export interface Patient {
   // I. HÀNH CHÍNH
   name: string; // Họ và tên
   phone: string; // Số điện thoại
+  email?: string; // Địa chỉ email nhận thông báo nhắc hẹn / tái khám định kỳ
   age: number; // Tuổi
   gender: 'Nam' | 'Nữ'; // Giới tính
   occupation?: string; // Nghề nghiệp
@@ -321,6 +326,12 @@ export interface Patient {
   modalities?: string[]; // Danh sách các phác đồ / kỹ thuật bác sĩ chọn: Shockwave, EBS, TENS, DIY, Chiếu đèn cấp dưỡng, Giãn cơ, Di cơ, Tác động cột sống, Chế độ dinh dưỡng, Chế độ tập luyện tại nhà, Bài tập vận động tại chỗ
   selectedProtocols?: string[]; // Danh sách tên các phác đồ chuẩn bác sĩ đã chọn
   treatmentGoals?: string[]; // Mục tiêu điều trị do Bác sĩ thiết lập (VD: Giảm thang đau VAS < 2, Phục hồi biên độ khớp gối 125 độ...)
+  salesStaff?: string; // Nhân viên Sale phụ trách / mời khách đến tư vấn (dùng cho Kế toán đối soát KPI)
+  salesSource?: string; // Kênh giới thiệu / Nguồn tiếp cận (Facebook Ads, Hotline, Giới thiệu, Zalo...)
+  attendingDoctor?: string; // Bác sĩ điều trị / phụ trách chính (tự động ghi nhận từ tài khoản đăng nhập)
+  createdByDoctor?: string; // Bác sĩ khởi tạo bệnh án EMR (tự động ghi nhận)
+  lastModifiedBy?: string; // Bác sĩ / nhân viên sửa gần nhất (tự động ghi nhận)
+  lastModifiedAt?: string; // Thời điểm sửa gần nhất
   auditLogs?: EMRAuditLog[]; // Nhật ký chỉnh sửa liệu trình & EMR của bệnh nhân
 }
 
@@ -465,13 +476,15 @@ export const CLINICAL_DOCTOR_MODALITIES: DoctorModalityItem[] = [
 export interface RevisitReminderLog {
   id: string;
   sentAt: string;
-  channel: 'sms' | 'push' | 'portal' | 'zalo' | 'phone';
+  channel: 'sms' | 'push' | 'portal' | 'zalo' | 'phone' | 'email';
   message: string;
   senderName: string;
-  apiProvider?: string; // 'eSMS.vn' | 'SpeedSMS' | 'Web Push API' | 'Twilio' | 'Zalo ZNS'
-  transactionId?: string; // 'TXN_SMS_...'
+  apiProvider?: string; // 'eSMS.vn' | 'SpeedSMS' | 'Web Push API' | 'Twilio' | 'Zalo ZNS' | 'Resend Email API' | 'SendGrid'
+  transactionId?: string; // 'TXN_SMS_...' | 'TXN_MAIL_...'
   status?: 'DELIVERED' | 'SENT' | 'PENDING' | 'FAILED';
   phone?: string;
+  emailRecipient?: string;
+  emailSubject?: string;
   cost?: number; // VND
   isOverdueCase?: boolean; // true nếu là ca quá hạn, false nếu là ca sắp tới
 }
@@ -486,6 +499,8 @@ export interface Invoice {
   status: 'Đã thanh toán' | 'Chưa thanh toán';
   method?: string;
   paidDate?: string;
+  salesStaff?: string; // Nhân viên Sale phụ trách mời đến (ghi nhận để kế toán tính KPI)
+  commissionAmount?: number; // Số tiền hoa hồng tính cho Sale (nếu có)
   debtType?: string;
   debtRemaining?: number | string;
   confirmedByPatient?: boolean;
@@ -534,19 +549,58 @@ export interface Technician {
   lastCheckOut?: { time: string; address?: string } | null;
 }
 
+export interface TourEvaluationCriteria {
+  // 1. Phản ứng lâm sàng tức thì của bệnh nhân
+  vasBefore: number; // Điểm đau trước làm (0-10)
+  vasAfter: number; // Điểm đau sau làm (0-10)
+  romImprovement: string; // Cải thiện tầm vận động
+  muscleSpasmRelief: string; // Mức độ giãn cơ, giải co thắt
+  patientReaction: string; // Phản ứng cơ thể sau làm
+
+  // 2. Tiêu chí Kỹ thuật Chuyên môn & An toàn
+  protocolAdherence: string; // Tuân thủ phác đồ & thời lượng
+  equipmentSafety: string; // An toàn kỹ thuật & thiết bị
+  sanitizationDone: boolean; // Vệ sinh, khử khuẩn đầu dò/ga đệm
+
+  // 3. Trải nghiệm & Tương tác Bệnh nhân
+  patientSatisfaction: number; // 1-5 sao ⭐
+  patientFeedback?: string; // Lời phản hồi trực tiếp từ bệnh nhân
+  homeCareInstructed: boolean; // Đã dặn dò bài tập về nhà & tư thế
+
+  // 4. Kết luận & Đề xuất cho Buổi tiếp theo
+  overallAssessment: 'Xuất sắc' | 'Đạt chuẩn' | 'Cần lưu ý';
+  technicianNotes?: string; // Ghi chú của KTV
+  doctorRecommendation?: string; // Đề xuất cho Bác sĩ buổi tới
+}
+
 export interface TourItem {
   id: string;
   date: string;
+  time?: string;
   technicianId: string;
   technicianName: string;
+  technicianRole?: 'Vận động' | 'Máy' | 'Tay';
   appointmentId?: string;
+  patientId?: string;
   patientName: string;
+  treatmentId?: string;
+  sessionNumber?: number;
+  totalSessions?: number;
+  bodyPart?: string;
   service?: string;
   doctor?: string;
-  apptTime?: string;
+  durationMinutes?: number;
   status: 'Chưa xong' | 'Đã xong';
+  evaluation?: TourEvaluationCriteria;
   progressNote?: string;
   progressFields?: any;
+  doctorApproved?: boolean;
+  doctorApprovedAt?: string;
+  doctorApprovedBy?: string;
+  doctorDirectives?: string;
+  confirmedByPatient?: boolean;
+  patientConfirmedAt?: string;
+  createdAt?: string;
 }
 
 export interface Exercise {
@@ -625,6 +679,11 @@ export interface ChatConversation {
   lastMessage: string;
   lastMessageTime: string;
   messages: ChatMessage[];
+  salesStaff?: string; // Nhân viên Sale phụ trách / mời đến tư vấn (dùng cho Kế toán đối soát KPI)
+  salesSource?: string; // Nguồn tiếp cận (Facebook Ads, Hotline, Giới thiệu, Zalo...)
+  commissionEarned?: number; // Hoa hồng tạm tính nếu khách chốt liệu trình
+  dealStatus?: 'Đang tư vấn' | 'Đã đặt hẹn' | 'Đã chốt liệu trình' | 'Đã thanh toán' | 'Hủy tư vấn';
+  expectedRevenue?: number; // Doanh thu gói liệu trình dự kiến / thực tế (VNĐ)
 }
 
 export interface WarrantyCheckIn {

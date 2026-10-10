@@ -8,6 +8,8 @@ import {
   FamilyHistoryMember,
   PresentIllnessDetails,
   HealthMetric,
+  AppUser,
+  EMRAuditLog,
 } from '../types';
 import {
   X,
@@ -34,6 +36,7 @@ interface ClinicalEMRFormModalProps {
   onClose: () => void;
   onSave: (patient: Patient) => void;
   initialPatient?: Patient | null;
+  currentUser?: AppUser | null;
 }
 
 export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
@@ -41,6 +44,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
   onClose,
   onSave,
   initialPatient,
+  currentUser,
 }) => {
   const [activeSection, setActiveSection] = useState<
     'admin' | 'chief' | 'history' | 'past' | 'diagnosis' | 'metrics'
@@ -48,6 +52,12 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
 
   // FORM VALIDATION ERROR
   const [formError, setFormError] = useState<string | null>(null);
+
+  // USER REQUIREMENT: TỰ ĐỘNG GHI NHẬN TÊN BÁC SĨ ĐANG ĐĂNG NHẬP VÀO BỆNH ÁN EMR
+  const loggedInDoctorDefault = currentUser?.name || initialPatient?.attendingDoctor || initialPatient?.createdByDoctor || 'BS. CKII Hoàng Minh';
+  const [attendingDoctor, setAttendingDoctor] = useState<string>(
+    initialPatient?.attendingDoctor || loggedInDoctorDefault
+  );
 
   // VI. CHỈ SỐ LÂM SÀNG BAN ĐẦU CỦA BÁC SĨ (Baseline Metrics)
   const [initialPainScore, setInitialPainScore] = useState<number>(5);
@@ -140,6 +150,9 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
     if (isOpen) {
       if (initialPatient) {
         // Load existing patient data
+        setAttendingDoctor(
+          initialPatient.attendingDoctor || currentUser?.name || initialPatient.createdByDoctor || 'BS. CKII Hoàng Minh'
+        );
         setName(initialPatient.name || '');
         setPhone(initialPatient.phone || '');
         setAge(initialPatient.age || 40);
@@ -275,6 +288,7 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
         }
       } else {
         // Reset defaults for new patient
+        setAttendingDoctor(currentUser?.name || 'BS. CKII Hoàng Minh');
         setFormError(null);
         setName('');
         setPhone('');
@@ -679,6 +693,28 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
       // Tái khám EMR
       nextRevisitDate: nextRevisitDate || undefined,
       revisitNotes: revisitNotes || undefined,
+
+      // USER REQUIREMENT: TỰ ĐỘNG GHI NHẬN BÁC SĨ ĐIỀN / SỬA BỆNH ÁN
+      attendingDoctor: attendingDoctor.trim() || loggedInDoctorDefault,
+      createdByDoctor: initialPatient?.createdByDoctor || attendingDoctor.trim() || loggedInDoctorDefault,
+      lastModifiedBy: attendingDoctor.trim() || loggedInDoctorDefault,
+      lastModifiedAt: new Date().toLocaleString('vi-VN'),
+      revisitDoctor: initialPatient?.revisitDoctor || attendingDoctor.trim() || loggedInDoctorDefault,
+      auditLogs: [
+        {
+          id: uid('log'),
+          timestamp: new Date().toLocaleString('vi-VN'),
+          performedBy: attendingDoctor.trim() || loggedInDoctorDefault,
+          role: currentUser?.title || 'Bác sĩ điều trị',
+          action: initialPatient ? 'Bác sĩ chỉnh sửa hồ sơ bệnh án EMR' : 'Bác sĩ tạo mới hồ sơ bệnh án EMR',
+          details: `Bác sĩ ${attendingDoctor.trim() || loggedInDoctorDefault} đã ${
+            initialPatient ? 'chỉnh sửa và cập nhật' : 'khởi tạo mới'
+          } hồ sơ bệnh án lâm sàng EMR cho bệnh nhân ${name.trim()}.`,
+          treatmentPlan: initialPatient?.treatmentPlan || `Phác đồ chuyên sâu vùng ${bodyPart}`,
+          bodyPart,
+        },
+        ...(initialPatient?.auditLogs || []),
+      ],
     };
 
     onSave(updatedPatient);
@@ -862,6 +898,43 @@ export const ClinicalEMRFormModal: React.FC<ClinicalEMRFormModalProps> = ({
           {/* I. HÀNH CHÍNH */}
           {activeSection === 'admin' && (
             <div className="space-y-4 animate-fadeIn">
+              {/* USER REQUIREMENT: BÁC SĨ KHÁM & ĐIỀN BỆNH ÁN TỰ ĐỘNG THEO TÀI KHOẢN ĐĂNG NHẬP */}
+              <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 p-4 rounded-2xl border border-indigo-200/80 space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                    <Stethoscope className="w-4 h-4 text-indigo-600" />
+                    <span>Bác Sĩ Khám &amp; Điền Bệnh Án EMR:</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-indigo-800 bg-indigo-100/90 border border-indigo-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-indigo-600" />
+                    <span>Tự động ghi nhận từ tài khoản đăng nhập</span>
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    required
+                    value={attendingDoctor}
+                    onChange={(e) => setAttendingDoctor(e.target.value)}
+                    placeholder="BS. CKII Hoàng Minh"
+                    className="w-full px-3.5 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-black text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                  />
+                  {currentUser?.name && (
+                    <button
+                      type="button"
+                      onClick={() => setAttendingDoctor(currentUser.name)}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-bold whitespace-nowrap transition cursor-pointer shadow-xs"
+                      title="Gán tên tài khoản đang đăng nhập"
+                    >
+                      Dùng Tên Tôi
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10.5px] text-indigo-700">
+                  * Hệ thống tự động ghi nhận Bác sĩ <strong>{attendingDoctor || loggedInDoctorDefault}</strong> ({currentUser?.title || 'Phụ trách chuyên môn EMR'}) vào hồ sơ bệnh án và nhật ký audit log.
+                </p>
+              </div>
+
               <div className="flex items-center space-x-2 pb-2 border-b border-slate-100">
                 <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">
                   I

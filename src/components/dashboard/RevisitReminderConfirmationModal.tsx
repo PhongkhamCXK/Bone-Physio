@@ -27,7 +27,9 @@ import {
   CalendarCheck,
   Sparkles,
   Info,
+  Mail,
 } from 'lucide-react';
+import { sendRevisitReminderEmail, resolvePatientEmail } from '../../services/emailService';
 
 interface RevisitReminderConfirmationModalProps {
   isOpen: boolean;
@@ -66,7 +68,7 @@ export const RevisitReminderConfirmationModal: React.FC<
 
   // States
   const [step, setStep] = useState<StepType>('compose');
-  const [channel, setChannel] = useState<'sms' | 'push' | 'portal' | 'zalo'>('sms');
+  const [channel, setChannel] = useState<'sms' | 'push' | 'portal' | 'zalo' | 'email'>('email');
   const [copied, setCopied] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [apiResponse, setApiResponse] = useState<SendReminderApiResponse | null>(null);
@@ -457,7 +459,25 @@ Chúc Quý khách một ngày sức khỏe & an lành!`;
               <label className="block text-xs font-bold text-slate-700 mb-2">
                 Chọn Kênh & Cổng API Phát Lệnh:
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setChannel('email')}
+                  className={`p-3 rounded-2xl border text-left transition flex flex-col items-start ${
+                    channel === 'email'
+                      ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20 shadow-sm'
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-1.5 font-bold text-xs text-indigo-900 mb-0.5">
+                    <Mail className="w-4 h-4 text-indigo-600" />
+                    <span>Email Y Tế</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Resend / SendGrid
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setChannel('sms')}

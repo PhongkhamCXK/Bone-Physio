@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Treatment, SessionSchedule, Patient, Appointment, AppUser, isDoctorUser } from '../types';
+import { Treatment, SessionSchedule, Patient, Appointment, AppUser, isDoctorUser, Technician } from '../types';
 import {
   Calendar,
   Clock,
@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Flame,
   Lock,
+  UserCheck,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
 
@@ -22,6 +23,7 @@ interface ScheduleTreatmentModalProps {
   patient?: Patient;
   isOpen: boolean;
   onClose: () => void;
+  technicians?: Technician[];
   currentUser?: AppUser | null;
   onSaveSchedule: (
     updatedTreatment: Treatment,
@@ -37,6 +39,7 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
   patient,
   isOpen,
   onClose,
+  technicians = [],
   currentUser,
   onSaveSchedule,
 }) => {
@@ -48,6 +51,9 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
     treatment.sessions && treatment.sessions[0]?.date
       ? treatment.sessions[0].date
       : new Date().toISOString().split('T')[0];
+
+  const defaultTech = treatment.technician || technicians[0]?.name || 'KTV. Lê Văn Sơn';
+  const [assignedTechnician, setAssignedTechnician] = useState<string>(defaultTech);
 
   const [startDate, setStartDate] = useState(initialStartDate);
   const [frequency, setFrequency] = useState<'mwf' | 'tts' | 'daily' | 'alternate'>('mwf');
@@ -62,6 +68,7 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
       content: `Buổi ${i + 1}: Trị liệu ${treatment.bodyPart} - ${treatment.plan.slice(0, 30)}...`,
       completed: i < (treatment.done || 0),
       isCheckpoint: (i + 1) % 7 === 0 || i + 1 === total, // Khám nhắc ở các mốc 7, 14, 21...
+      technician: defaultTech,
     }));
   });
 
@@ -130,6 +137,7 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
             : `Buổi ${sessionIdx + 1}: Trị liệu ${treatment.bodyPart} theo phác đồ`,
           completed: sessionIdx < (treatment.done || 0),
           isCheckpoint,
+          technician: newSessions[sessionIdx]?.technician || assignedTechnician,
         };
 
         sessionIdx++;
@@ -217,6 +225,12 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
     );
   };
 
+  const handleApplyTechToAllSessions = () => {
+    setSessions((prev) =>
+      prev.map((s) => ({ ...s, technician: assignedTechnician }))
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -226,6 +240,7 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
 
     const updatedTreatment: Treatment = {
       ...treatment,
+      technician: assignedTechnician,
       followup: revisitDate,
       revisitDate,
       revisitNotes,
@@ -397,6 +412,50 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
             </label>
           </div>
 
+          {/* PHÂN BỔ KỸ THUẬT VIÊN (KTV) THỰC HIỆN LIỆU TRÌNH */}
+          <div className="bg-teal-50/70 p-4 rounded-2xl border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <label className="text-xs font-bold text-teal-950 flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4 text-teal-600" />
+                <span>Kỹ Thuật Viên (KTV) Phụ Trách Thực Hiện</span>
+              </label>
+              <p className="text-[11px] text-teal-700">
+                Phân bổ KTV trực tiếp làm liệu trình và đồng bộ vào lịch trình các buổi
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={assignedTechnician}
+                onChange={(e) => setAssignedTechnician(e.target.value)}
+                className="px-3 py-2 bg-white border border-teal-300 rounded-xl text-xs font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+              >
+                {technicians.map((ktv) => (
+                  <option key={ktv.id} value={ktv.name}>
+                    {ktv.name} ({ktv.techType}) • {ktv.status}
+                  </option>
+                ))}
+                {technicians.length === 0 && (
+                  <>
+                    <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                    <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                    <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
+                  </>
+                )}
+                {!technicians.some((k) => k.name === assignedTechnician) && (
+                  <option value={assignedTechnician}>{assignedTechnician}</option>
+                )}
+              </select>
+              <button
+                type="button"
+                onClick={handleApplyTechToAllSessions}
+                className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-xs whitespace-nowrap cursor-pointer active:scale-95"
+                title="Gán KTV đang chọn cho tất cả các buổi điều trị"
+              >
+                Gán Cho Tất Cả Buổi
+              </button>
+            </div>
+          </div>
+
           {/* SẮP XẾP LỊCH TỪNG BUỔI (SCHEDULE MATRIX) */}
           <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -541,29 +600,45 @@ export const ScheduleTreatmentModal: React.FC<ScheduleTreatmentModalProps> = ({
                       </div>
                     </div>
 
-                    {/* DÒNG CHI TIẾT: BÁC SĨ / KTV PHỤ TRÁCH VÀ KẾT QUẢ ĐIỀU TRỊ / TIẾN TRIỂN */}
+                    {/* DÒNG CHI TIẾT: KTV PHỤ TRÁCH VÀ KẾT QUẢ ĐIỀU TRỊ / TIẾN TRIỂN */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50/70 p-2 rounded-lg border border-slate-100">
                       <div className="flex items-center space-x-1.5">
-                        <span className="text-slate-500 font-semibold flex-shrink-0 text-[10px]">
-                          Bác sĩ / KTV:
+                        <span className="text-teal-700 font-bold flex-shrink-0 text-[10px]">
+                          KTV làm:
                         </span>
-                        <input
-                          type="text"
-                          value={s.technician || s.doctor || ''}
+                        <select
+                          value={s.technician || assignedTechnician}
                           onChange={(e) => handleUpdateSessionDoctorTech(idx, e.target.value)}
-                          placeholder="BS. Hoàng Minh / KTV Sơn..."
-                          className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
+                          className="w-full px-2 py-0.5 bg-white border border-teal-200 rounded text-[11px] font-semibold text-teal-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        >
+                          {technicians.map((ktv) => (
+                            <option key={ktv.id} value={ktv.name}>
+                              {ktv.name} ({ktv.techType})
+                            </option>
+                          ))}
+                          {technicians.length === 0 && (
+                            <>
+                              <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                              <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                              <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
+                            </>
+                          )}
+                          {!technicians.some((k) => k.name === (s.technician || assignedTechnician)) && (
+                            <option value={s.technician || assignedTechnician}>
+                              {s.technician || assignedTechnician}
+                            </option>
+                          )}
+                        </select>
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <span className="text-slate-500 font-semibold flex-shrink-0 text-[10px]">
-                          Kết quả điều trị:
+                          Tiến triển:
                         </span>
                         <input
                           type="text"
                           value={s.result || ''}
                           onChange={(e) => handleUpdateSessionResult(idx, e.target.value)}
-                          placeholder="VAS giảm còn 3/10, cơ giãn mềm, tiến triển tốt..."
+                          placeholder="VAS giảm còn 3/10, cơ giãn mềm..."
                           className="w-full px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 text-indigo-700 font-medium"
                         />
                       </div>

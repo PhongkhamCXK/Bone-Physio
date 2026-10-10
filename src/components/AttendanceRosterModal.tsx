@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Treatment, SessionSchedule, Patient, Staff } from '../types';
+import { Treatment, SessionSchedule, Patient, Staff, Technician } from '../types';
 import {
   CheckCircle2,
   Circle,
@@ -23,6 +23,7 @@ interface AttendanceRosterModalProps {
   patient?: Patient;
   isOpen: boolean;
   onClose: () => void;
+  technicians?: Technician[];
   staffList?: Staff[];
   onSaveAttendance: (updatedTreatment: Treatment) => void;
 }
@@ -32,6 +33,7 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
   patient,
   isOpen,
   onClose,
+  technicians = [],
   staffList = [],
   onSaveAttendance,
 }) => {
@@ -60,7 +62,7 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
   });
 
   const [defaultTechnician, setDefaultTechnician] = useState<string>(
-    staffList[0]?.name || 'KTV. Trần Minh Long'
+    treatment?.technician || technicians[0]?.name || staffList[0]?.name || 'KTV. Lê Văn Sơn'
   );
 
   useEffect(() => {
@@ -81,6 +83,9 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
       });
     }
     setSessions(base);
+    if (treatment.technician) {
+      setDefaultTechnician(treatment.technician);
+    }
   }, [treatment, totalSessions]);
 
   if (!isOpen || !treatment) return null;
@@ -159,6 +164,13 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
     );
   };
 
+  // Bulk apply selected technician to all sessions
+  const handleApplyTechToAll = () => {
+    setSessions((prev) =>
+      prev.map((s) => ({ ...s, technician: defaultTechnician }))
+    );
+  };
+
   // Save changes back to Treatment
   const handleSave = () => {
     const newDone = sessions.filter(
@@ -173,6 +185,7 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
 
     const updatedTreatment: Treatment = {
       ...treatment,
+      technician: defaultTechnician,
       done: newDone,
       status: newStatus,
       sessions: sessions,
@@ -289,14 +302,20 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
             </div>
 
             {/* Default technician selector */}
-            <div className="flex items-center space-x-1.5">
-              <span className="text-[11px] text-slate-500 font-semibold whitespace-nowrap">KTV thực hiện:</span>
+            <div className="flex items-center space-x-1.5 flex-wrap">
+              <span className="text-[11px] text-teal-800 font-bold whitespace-nowrap">KTV thực hiện:</span>
               <select
                 value={defaultTechnician}
                 onChange={(e) => setDefaultTechnician(e.target.value)}
-                className="px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2 py-1 bg-white border border-teal-300 rounded-lg text-xs font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
               >
-                {staffList.length > 0 ? (
+                {technicians && technicians.length > 0 ? (
+                  technicians.map((ktv) => (
+                    <option key={ktv.id} value={ktv.name}>
+                      {ktv.name} ({ktv.techType}) • {ktv.status}
+                    </option>
+                  ))
+                ) : staffList.length > 0 ? (
                   staffList.map((st) => (
                     <option key={st.id} value={st.name}>
                       {st.name} ({st.title || st.role})
@@ -304,12 +323,20 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
                   ))
                 ) : (
                   <>
-                    <option value="KTV. Trần Minh Long">KTV. Trần Minh Long</option>
-                    <option value="KTV. Lê Thị Kim">KTV. Lê Thị Kim</option>
-                    <option value="BS. CKII Hoàng Minh">BS. CKII Hoàng Minh</option>
+                    <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                    <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                    <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
                   </>
                 )}
               </select>
+              <button
+                type="button"
+                onClick={handleApplyTechToAll}
+                className="px-2 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg text-[10.5px] font-bold transition cursor-pointer"
+                title="Gán KTV đang chọn cho tất cả các buổi điều trị"
+              >
+                Gán cho tất cả
+              </button>
             </div>
           </div>
         </div>
@@ -396,14 +423,31 @@ export const AttendanceRosterModal: React.FC<AttendanceRosterModalProps> = ({
                       />
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block font-semibold">Người làm:</span>
-                      <input
-                        type="text"
-                        value={s.technician || ''}
-                        placeholder={defaultTechnician}
+                      <span className="text-[10px] text-teal-700 block font-bold">KTV thực hiện:</span>
+                      <select
+                        value={s.technician || defaultTechnician}
                         onChange={(e) => updateSessionDetail(s.number, 'technician', e.target.value)}
-                        className="w-full text-[11px] p-1 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 truncate"
-                      />
+                        className="w-full text-[11px] p-1 bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 font-semibold text-teal-900"
+                      >
+                        {technicians && technicians.length > 0 ? (
+                          technicians.map((ktv) => (
+                            <option key={ktv.id} value={ktv.name}>
+                              {ktv.name} ({ktv.techType})
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                            <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                            <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
+                          </>
+                        )}
+                        {!technicians.some((k) => k.name === (s.technician || defaultTechnician)) && (
+                          <option value={s.technician || defaultTechnician}>
+                            {s.technician || defaultTechnician}
+                          </option>
+                        )}
+                      </select>
                     </div>
                   </div>
 

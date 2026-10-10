@@ -11,6 +11,7 @@ import {
   SessionSchedule,
 } from '../types';
 import { INITIAL_CHAT_CONVERSATIONS } from '../data/chatSeedData';
+import { getInitialPatientTasks } from '../data/seedData';
 import {
   FileText,
   Activity,
@@ -92,6 +93,22 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   const [patientData, setPatientData] = useState<Patient>(patient);
   const [showAvatarPickerModal, setShowAvatarPickerModal] = useState(false);
   const [stickVersion, setStickVersion] = useState(0);
+
+  // Đồng bộ tức thời khi props bệnh nhân từ cấp cha thay đổi
+  useEffect(() => {
+    if (patient) {
+      setPatientData(patient);
+    }
+  }, [patient?.id, patient]);
+
+  // Đồng bộ bệnh nhân đang chọn: ưu tiên tìm trong allPatients theo id của patientData hoặc patient
+  const activePatient: Patient =
+    (allPatients && allPatients.length > 0
+      ? allPatients.find((p) => p.id === (patientData?.id || patient?.id)) ||
+        allPatients.find((p) => p.id === patient?.id)
+      : null) ||
+    patientData ||
+    patient;
 
   useEffect(() => {
     const handleUpdate = () => setStickVersion((v) => v + 1);
@@ -242,23 +259,18 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
   useEffect(() => {
     if (initialTab) {
       setActiveSubTab(initialTab);
-      if (initialTab === 'overview') {
-        setTimeout(() => {
-          scrollToEMR(true);
-        }, 120);
-      }
     }
   }, [initialTab]);
 
   const patientTreatments = treatments.filter(
-    (t) => t.patientId === patient.id || t.patientName === patient.name
+    (t) => t.patientId === activePatient.id || t.patientName === activePatient.name
   );
   const myAppts = appointments.filter(
-    (a) => a.patientId === patient.id || a.patientName === patient.name
+    (a) => a.patientId === activePatient.id || a.patientName === activePatient.name
   );
-  const myInvoices = invoices.filter((i) => i.patientId === patient.id);
+  const myInvoices = invoices.filter((i) => i.patientId === activePatient.id);
   const myWarranty = warranties.find(
-    (w) => w.patientId === patient.id || w.patientName === patient.name
+    (w) => w.patientId === activePatient.id || w.patientName === activePatient.name
   );
 
   const primaryTreatment = patientTreatments[0];
@@ -267,7 +279,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
     : 0;
 
   // Fallback: If no exercises specifically assigned, smart-assign based on patient's bodyPart so the patient NEVER sees an empty exercise list
-  const targetExs = (patient.assignedExercises || [])
+  const targetExs = (activePatient.assignedExercises || [])
     .map((id) => exercises.find((e) => e.id === id))
     .filter(Boolean) as Exercise[];
 
@@ -276,7 +288,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
       ? targetExs
       : exercises
           .filter((e) => {
-            const bpLower = (patient.bodyPart || '').toLowerCase();
+            const bpLower = (activePatient.bodyPart || '').toLowerCase();
             const ebpLower = (e.bodyPart || '').toLowerCase();
             if (bpLower.includes('cổ') || bpLower.includes('vai') || bpLower.includes('gáy')) {
               return ebpLower.includes('cổ') || ebpLower.includes('vai') || ebpLower.includes('lưng trên');
@@ -289,7 +301,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
           .slice(0, 3);
 
   // Daily exercise completion tracker
-  const todayKey = `bp_ex_done_${patient.id}_${new Date().toISOString().slice(0, 10)}`;
+  const todayKey = `bp_ex_done_${activePatient.id}_${new Date().toISOString().slice(0, 10)}`;
   const [completedExIds, setCompletedExIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(todayKey);
@@ -298,6 +310,15 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
       return [];
     }
   });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(todayKey);
+      setCompletedExIds(saved ? JSON.parse(saved) : []);
+    } catch {
+      setCompletedExIds([]);
+    }
+  }, [todayKey, activePatient.id]);
 
   const toggleCompleteExercise = (id: string) => {
     setCompletedExIds((prev) => {
@@ -330,13 +351,13 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
 
   // Find or create conversation for this patient
   const patientConv = conversations.find(
-    (c) => c.patientId === patient.id || c.customerName.toLowerCase() === patient.name.toLowerCase()
+    (c) => c.patientId === activePatient.id || c.customerName.toLowerCase() === activePatient.name.toLowerCase()
   ) || {
-    id: `conv_${patient.id}`,
-    patientId: patient.id,
-    customerName: patient.name,
-    customerPhone: patient.phone,
-    bodyPart: patient.bodyPart,
+    id: `conv_${activePatient.id}`,
+    patientId: activePatient.id,
+    customerName: activePatient.name,
+    customerPhone: activePatient.phone,
+    bodyPart: activePatient.bodyPart,
     tag: 'Đang điều trị' as const,
     status: 'online' as const,
     unreadCount: 0,
@@ -347,7 +368,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
         id: `init_${Date.now()}`,
         sender: 'staff' as const,
         senderName: 'BS. Lê Trọng Hưng (CSKH)',
-        text: `Chào ${patient.name}! Bác sĩ và bộ phận CSKH Bone Physio luôn trực tuyến để giải đáp các thắc mắc về phác đồ điều trị ${patient.bodyPart} và hướng dẫn tập luyện cho bạn.`,
+        text: `Chào ${activePatient.name}! Bác sĩ và bộ phận CSKH Bone Physio luôn trực tuyến để giải đáp các thắc mắc về phác đồ điều trị ${activePatient.bodyPart} và hướng dẫn tập luyện cho bạn.`,
         timestamp: '08:00',
       },
     ],
@@ -373,7 +394,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
     const newMsg: ChatMessage = {
       id: `pat_msg_${Date.now()}`,
       sender: 'patient',
-      senderName: patient.name,
+      senderName: activePatient.name,
       text,
       timestamp: timeStr,
     };
@@ -446,25 +467,19 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
     // Đồng bộ check-list nhất quán với PatientWeekChecklist (Tập tại nhà • Ăn uống • Thực đơn)
     let stickData: Record<string, boolean> = {};
     try {
-      const raw = localStorage.getItem(`bp_patient_stick_tasks_${patientData.id}`);
+      const raw = localStorage.getItem(`bp_patient_stick_tasks_${activePatient.id}`);
       if (raw) {
         stickData = JSON.parse(raw);
       } else {
-        stickData = {
-          "w1_d0_tap_tai_nha": true,
-          "w1_d0_an_uong": true,
-          "w1_d0_thuc_don": true,
-          "w1_d1_tap_tai_nha": true,
-          "w1_d1_an_uong": true,
-        };
+        stickData = getInitialPatientTasks(activePatient.id);
       }
     } catch {
-      stickData = {};
+      stickData = getInitialPatientTasks(activePatient.id);
     }
 
     const jsDay = new Date().getDay();
     const currentDayIdx = jsDay === 0 ? 6 : jsDay - 1; // 0 = Thứ 2, ..., 6 = Chủ Nhật
-    const storedWeek = parseInt(localStorage.getItem(`bp_patient_selected_week_${patientData.id}`) || '1', 10);
+    const storedWeek = parseInt(localStorage.getItem(`bp_patient_selected_week_${activePatient.id}`) || '1', 10);
     const activeWeekNum = Math.min(6, Math.max(1, isNaN(storedWeek) ? 1 : storedWeek));
     const todayStickKeys = [
       `w${activeWeekNum}_d${currentDayIdx}_tap_tai_nha`,
@@ -479,31 +494,38 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
       if (stickData[`w${activeWeekNum}_d${d}_thuc_don`]) weekCompletedCount++;
     }
 
+    const bpText = (activePatient.bodyPart || '').toLowerCase();
     const effectiveMetrics =
-      patient.healthMetrics && patient.healthMetrics.length > 0
-        ? patient.healthMetrics
+      activePatient.healthMetrics && activePatient.healthMetrics.length > 0
+        ? activePatient.healthMetrics
         : [
             {
-              id: `HM_BASE_${patient.id}`,
-              date: patient.firstVisitDateTime ? patient.firstVisitDateTime.split('T')[0] : new Date().toISOString().split('T')[0],
-              painScore: 5,
-              rangeOfMotion: 'Hạn chế 30% khi gập/xoay',
-              muscleStrength: '4/5',
-              bloodPressure: '120/80 mmHg',
-              heartRate: '76 bpm',
+              id: `HM_BASE_${activePatient.id}`,
+              date: activePatient.firstVisitDateTime ? activePatient.firstVisitDateTime.split('T')[0] : new Date().toISOString().split('T')[0],
+              painScore: bpText.includes('lưng') || bpText.includes('vai') ? 6 : bpText.includes('gối') ? 5 : 4,
+              rangeOfMotion: bpText.includes('gối')
+                ? 'Gập gối 105 độ (hạn chế 30 độ)'
+                : bpText.includes('vai')
+                ? 'Dang vai 85 độ (đau chói khớp)'
+                : bpText.includes('cổ')
+                ? 'Xoay nghiêng cổ hạn chế 25%'
+                : 'Cúi ngửa thắt lưng hạn chế 35%',
+              muscleStrength: bpText.includes('gối') ? '3+/5 (Teo nhẹ cơ tứ đầu)' : '4/5',
+              bloodPressure: activePatient.age && activePatient.age >= 60 ? '135/85 mmHg' : '120/80 mmHg',
+              heartRate: activePatient.age && activePatient.age >= 60 ? '78 bpm' : '74 bpm',
               spo2: '98%',
-              weight: 60,
-              height: 165,
-              bmi: '22.0',
-              functionalScore: 'ODI 20% (Mức độ vừa)',
-              jointCircumference: '36 cm',
-              notes: `Chỉ số khám lâm sàng ban đầu của Bác sĩ cho vùng ${patient.bodyPart}`,
+              weight: activePatient.gender === 'Nam' ? 68 : 55,
+              height: activePatient.gender === 'Nam' ? 170 : 158,
+              bmi: activePatient.gender === 'Nam' ? '23.5' : '22.0',
+              functionalScore: bpText.includes('lưng') ? 'ODI 26% (Mức độ vừa)' : bpText.includes('gối') ? 'KOOS 62/100' : 'QuickDASH 32%',
+              jointCircumference: bpText.includes('gối') ? '38.5 cm (Tràn dịch nhẹ)' : bpText.includes('vai') ? '34 cm' : '36 cm',
+              notes: `Chỉ số khám lâm sàng khởi đầu của ${activePatient.name} - Chẩn đoán: ${activePatient.diagnosis}`,
             },
           ];
 
-    const categoryInfo = (patientData.avatarType && AGE_CATEGORY_MAP[patientData.avatarType])
-      ? AGE_CATEGORY_MAP[patientData.avatarType]
-      : getCategoryByAge(patientData.age, patientData.gender);
+    const categoryInfo = (activePatient.avatarType && AGE_CATEGORY_MAP[activePatient.avatarType])
+      ? AGE_CATEGORY_MAP[activePatient.avatarType]
+      : getCategoryByAge(activePatient.age, activePatient.gender);
 
     return (
       <div className="space-y-6">
@@ -519,13 +541,13 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                   Chế Độ Bác Sĩ &amp; Quản Lý: Chọn Bệnh Nhân Xem Cửa Sổ Phục Hồi
                 </span>
                 <span className="text-[11px] text-blue-200 block">
-                  Đang xem cửa sổ của: <strong className="text-white font-bold">{patientData.name}</strong> • Chẩn đoán: {patientData.diagnosis}
+                  Đang xem cửa sổ của: <strong className="text-white font-bold">{activePatient.name}</strong> • Chẩn đoán: {activePatient.diagnosis}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-2 self-stretch sm:self-auto">
               <select
-                value={patientData.id}
+                value={activePatient.id}
                 onChange={(e) => {
                   const target = allPatients.find((p) => p.id === e.target.value);
                   if (target) {
@@ -550,11 +572,11 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
           <div className="flex items-center gap-4 sm:gap-5">
             <div className="relative group flex-shrink-0">
               <PatientAvatar
-                avatarUrl={patientData.avatar}
-                avatarType={patientData.avatarType}
-                name={patientData.name}
-                age={patientData.age}
-                gender={patientData.gender}
+                avatarUrl={activePatient.avatar}
+                avatarType={activePatient.avatarType}
+                name={activePatient.name}
+                age={activePatient.age}
+                gender={activePatient.gender}
                 size="2xl"
                 showBadge
                 className="ring-4 ring-white/30 shadow-2xl flex-shrink-0"
@@ -584,7 +606,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                         reader.onload = (ev) => {
                           if (ev.target?.result) {
                             const updated = {
-                              ...patientData,
+                              ...activePatient,
                               avatar: ev.target.result as string,
                             };
                             setPatientData(updated);
@@ -615,10 +637,10 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                 </span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold mt-1.5">
-                Xin chào, {patientData.name}
+                Xin chào, {activePatient.name}
               </h2>
               <p className="text-blue-100 text-xs sm:text-sm mt-1">
-                Mã bệnh nhân: <strong className="font-mono bg-white/20 px-2 py-0.5 rounded">{patientData.id}</strong> • {patientData.age} tuổi • Chẩn đoán: <strong>{patientData.diagnosis}</strong>
+                Mã bệnh nhân: <strong className="font-mono bg-white/20 px-2 py-0.5 rounded">{activePatient.id}</strong> • {activePatient.age} tuổi • Chẩn đoán: <strong>{activePatient.diagnosis}</strong>
               </p>
               <p className="text-amber-200/90 text-xs mt-1 italic hidden sm:block">
                 🎯 {categoryInfo.description}
@@ -885,7 +907,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                     Chẩn đoán chuyên khoa
                   </span>
                   <p className="text-sm font-bold text-slate-900 mt-1">
-                    {patient.diagnosis}
+                    {activePatient.diagnosis}
                   </p>
                 </div>
 
@@ -894,20 +916,20 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                     Vùng đau / Điều trị chính
                   </span>
                   <p className="text-sm font-bold text-blue-600 mt-1">
-                    {patient.bodyPart}
+                    {activePatient.bodyPart}
                   </p>
                 </div>
               </div>
 
               {/* Additional regions if any */}
-              {patient.additionalRegions && patient.additionalRegions.length > 0 && (
+              {activePatient.additionalRegions && activePatient.additionalRegions.length > 0 && (
                 <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2">
                   <span className="text-xs font-bold text-emerald-900 flex items-center">
                     <Sparkles className="w-4 h-4 mr-1 text-emerald-600" />
                     Các vùng làm thêm được bác sĩ cập nhật:
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {patient.additionalRegions.map((r) => (
+                    {activePatient.additionalRegions.map((r) => (
                       <div
                         key={r.id}
                         className="bg-white p-3 rounded-xl border border-emerald-200 text-xs"
@@ -1116,7 +1138,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Đích đến cần đạt được sau khi kết thúc liệu trình {primaryTreatment?.bodyPart || patient.bodyPart}
+                      Đích đến cần đạt được sau khi kết thúc liệu trình {primaryTreatment?.bodyPart || activePatient.bodyPart}
                     </p>
                   </div>
                 </div>
@@ -1130,13 +1152,13 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                 {(() => {
                   const defaultGoals = [
                     `Triệt tiêu cơn đau cấp tính, hạ điểm đau VAS từ ${effectiveMetrics[0]?.painScore || 7}/10 xuống dưới 2/10`,
-                    `Phục hồi biên độ vận động khớp & cột sống ${patient.bodyPart} đạt trên 90% tầm vận động chuẩn`,
+                    `Phục hồi biên độ vận động khớp & cột sống ${activePatient.bodyPart} đạt trên 90% tầm vận động chuẩn`,
                     `Giải phóng hoàn toàn co thắt cơ và các điểm kích hoạt Myofascial Trigger Point`,
                     `Tăng cường sức mạnh nhóm cơ lõi và cơ bảo vệ khớp, ngăn ngừa tái phát mạn tính`,
                     `Duy trì thói quen tập luyện tự phục hồi tại nhà 15-20 phút mỗi ngày theo video hướng dẫn`,
                   ];
-                  const goals = (patient.treatmentGoals && patient.treatmentGoals.length > 0)
-                    ? patient.treatmentGoals
+                  const goals = (activePatient.treatmentGoals && activePatient.treatmentGoals.length > 0)
+                    ? activePatient.treatmentGoals
                     : defaultGoals;
 
                   return goals.map((goal, idx) => (
@@ -1173,7 +1195,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                       Chỉ Số Khám Lâm Sàng Ban Đầu Của Bác Sĩ (Baseline Metrics)
                     </h4>
                     <p className="text-[11px] text-slate-500">
-                      Được ghi nhận tại buổi khám đầu tiên ({effectiveMetrics[0]?.date || patient.firstVisitDateTime || 'Ban đầu'}) để làm mốc đối chiếu tiến trình hồi phục
+                      Được ghi nhận tại buổi khám đầu tiên ({effectiveMetrics[0]?.date || activePatient.firstVisitDateTime || 'Ban đầu'}) để làm mốc đối chiếu tiến trình hồi phục
                     </p>
                   </div>
                 </div>
@@ -1627,7 +1649,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                         </span>
                       </h4>
                       <p className="text-xs text-slate-500">
-                        Chỉ định bởi: <strong>{patient.revisitDoctor || 'BS. CKII Hoàng Minh'}</strong> • Phù hợp vùng {patient.bodyPart}
+                        Chỉ định bởi: <strong>{activePatient.revisitDoctor || 'BS. CKII Hoàng Minh'}</strong> • Phù hợp vùng {activePatient.bodyPart}
                       </p>
                     </div>
                   </div>
@@ -1765,7 +1787,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
             )}
 
             {/* Diet Plan */}
-            {patient.dietPlan && (
+            {activePatient.dietPlan && (
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
@@ -1777,7 +1799,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                   </span>
                 </div>
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1 text-xs">
-                  {patient.dietPlan.map((d, idx) => (
+                  {activePatient.dietPlan.map((d, idx) => (
                     <div
                       key={idx}
                       className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1"
@@ -1900,7 +1922,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                     Phác Đồ Bài Tập Tự Phục Hồi Tại Nhà (Bác Sĩ Chỉ Định)
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Thiết kế riêng cho tình trạng <strong>{patient.diagnosis}</strong> ({patient.bodyPart})
+                    Thiết kế riêng cho tình trạng <strong>{activePatient.diagnosis}</strong> ({activePatient.bodyPart})
                   </p>
                 </div>
               </div>
@@ -1909,7 +1931,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
             {/* Prescribing doctor badge */}
             <div className="flex items-center space-x-2 px-3.5 py-2 bg-blue-50 border border-blue-200 rounded-2xl text-xs font-bold text-blue-900 self-start md:self-auto">
               <UserCheck className="w-4 h-4 text-blue-600" />
-              <span>Bác sĩ phụ trách: {patient.revisitDoctor || 'BS. CKII Hoàng Minh'}</span>
+              <span>Bác sĩ phụ trách: {activePatient.revisitDoctor || 'BS. CKII Hoàng Minh'}</span>
             </div>
           </div>
 
@@ -2463,7 +2485,8 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
       {activeSubTab === 'checklist' && (
         <div className="space-y-6">
           <PatientWeekChecklist
-            patient={patientData}
+            key={activePatient.id}
+            patient={activePatient}
             treatments={treatments}
             exercises={exercises}
             onUpdatePatient={onUpdatePatient}
@@ -2472,8 +2495,6 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
               if (onSwitchTab) onSwitchTab('exercises');
             }}
           />
-
-
         </div>
       )}
 
@@ -2571,14 +2592,14 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto p-1">
               {ALL_AVATAR_PRESETS.map((preset) => {
-                const isSelected = (!patientData.avatar || patientData.avatar === preset.src) && patientData.avatarType === preset.key;
+                const isSelected = (!activePatient.avatar || activePatient.avatar === preset.src) && activePatient.avatarType === preset.key;
                 return (
                   <button
                     key={preset.key}
                     type="button"
                     onClick={() => {
                       const updated = {
-                        ...patientData,
+                        ...activePatient,
                         avatar: preset.src,
                         avatarType: preset.key,
                       };
@@ -2587,7 +2608,7 @@ export const PatientPortalTab: React.FC<PatientPortalTabProps> = ({
                         const raw = localStorage.getItem('bp_patients');
                         if (raw) {
                           const list = JSON.parse(raw);
-                          const nextList = list.map((p: Patient) => (p.id === patient.id ? updated : p));
+                          const nextList = list.map((p: Patient) => (p.id === activePatient.id ? updated : p));
                           localStorage.setItem('bp_patients', JSON.stringify(nextList));
                         }
                       } catch (err) {

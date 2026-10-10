@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Patient, Appointment, Treatment, WarrantyRecord, Invoice, Exercise } from '../types';
+import { Patient, Appointment, Treatment, WarrantyRecord, Invoice, Exercise, AppUser } from '../types';
 import { DoctorPrescriptionModal } from './DoctorPrescriptionModal';
 import {
   UserPlus,
@@ -29,6 +29,7 @@ interface PatientsTabProps {
   warranties?: WarrantyRecord[];
   invoices?: Invoice[];
   exercises?: Exercise[];
+  currentUser?: AppUser | null;
   onAddPatient: (patient: Patient) => void;
   onUpdatePatient: (patient: Patient) => void;
   onDeletePatient: (id: string, deleteRelatedData?: boolean) => void;
@@ -43,6 +44,7 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
   warranties = [],
   invoices = [],
   exercises = [],
+  currentUser,
   onAddPatient,
   onUpdatePatient,
   onDeletePatient,
@@ -360,10 +362,12 @@ export const PatientsTab: React.FC<PatientsTabProps> = ({
 
       {/* Clinical EMR Form Modal (Chuẩn Y Khoa 5 Phân Hệ) */}
       <ClinicalEMRFormModal
+        key={editingPatient?.id || 'new_patient'}
         isOpen={isEMRModalOpen}
         onClose={() => setIsEMRModalOpen(false)}
         onSave={handleSaveEMR}
         initialPatient={editingPatient}
+        currentUser={currentUser}
       />
 
       {/* Modal Xác Nhận Xóa Bệnh Nhân Chuyên Nghiệp (Không dùng window.confirm tránh bị chặn trong iframe) */}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Patient, Treatment, Exercise, DietDay } from "../types";
-import { STANDARD_DIET_PLAN } from "../data/seedData";
+import { STANDARD_DIET_PLAN, getInitialPatientTasks } from "../data/seedData";
 import {
   Calendar,
   CheckCircle2,
@@ -135,11 +135,12 @@ export const PatientWeekChecklist: React.FC<PatientWeekChecklistProps> = ({
   onUpdatePatient,
   onOpenExercisesTab,
 }) => {
-  const totalSessions = 21;
   const activeTreatment =
-    treatments.find((t) => t.patientId === patient.id || t.patientName === patient.name) ||
-    treatments[0];
-  const completedSessions = Math.min(totalSessions, activeTreatment?.done || 6);
+    treatments.find((t) => t.patientId === patient.id || t.patientName === patient.name) || null;
+  const totalSessions = activeTreatment?.total || patient.treatmentSessions || 21;
+  const completedSessions = activeTreatment
+    ? Math.min(totalSessions, activeTreatment.done)
+    : Math.min(totalSessions, patient.treatmentSessions ? Math.round(patient.treatmentSessions * 0.4) : 4);
 
   const [selectedWeek, setSelectedWeek] = useState<number>(() => {
     try {
@@ -172,16 +173,39 @@ export const PatientWeekChecklist: React.FC<PatientWeekChecklistProps> = ({
     } catch (e) {
       console.error(e);
     }
-    return {
-      "w1_d0_tap_tai_nha": true,
-      "w1_d0_an_uong": true,
-      "w1_d0_thuc_don": true,
-      "w1_d1_tap_tai_nha": true,
-      "w1_d1_an_uong": true,
-      "w1_d2_tap_tai_nha": true,
-      "w1_d2_thuc_don": true,
-    };
+    return getInitialPatientTasks(patient.id);
   });
+
+  // Tự động tải lại tuần và danh sách hoàn thành khi chuyển sang bệnh nhân khác
+  React.useEffect(() => {
+    try {
+      const savedWeek = localStorage.getItem(`bp_patient_selected_week_${patient.id}`);
+      if (savedWeek) {
+        const parsed = parseInt(savedWeek, 10);
+        if (parsed >= 1 && parsed <= 6) {
+          setSelectedWeek(parsed);
+        } else {
+          setSelectedWeek(1);
+        }
+      } else {
+        setSelectedWeek(1);
+      }
+    } catch {
+      setSelectedWeek(1);
+    }
+    setSelectedDayIndex(0);
+
+    try {
+      const savedTasks = localStorage.getItem(`bp_patient_stick_tasks_${patient.id}`);
+      if (savedTasks) {
+        setCompletedTaskIds(JSON.parse(savedTasks));
+      } else {
+        setCompletedTaskIds(getInitialPatientTasks(patient.id));
+      }
+    } catch {
+      setCompletedTaskIds(getInitialPatientTasks(patient.id));
+    }
+  }, [patient.id]);
 
   const toggleStick = (taskKey: string) => {
     setCompletedTaskIds((prev) => {

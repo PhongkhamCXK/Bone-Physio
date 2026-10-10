@@ -74,14 +74,26 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
 
   const initialSessions = primaryTreatment?.total || patient.treatmentSessions || 15;
   const [sessionsCount, setSessionsCount] = useState<number>(initialSessions);
+  const [selectedTechnician, setSelectedTechnician] = useState<string>(
+    primaryTreatment?.technician || 'KTV. Lê Văn Sơn'
+  );
 
   React.useEffect(() => {
     if (primaryTreatment?.total) {
       setSessionsCount(primaryTreatment.total);
     } else if (patient.treatmentSessions) {
       setSessionsCount(patient.treatmentSessions);
+    } else {
+      setSessionsCount(15);
     }
-  }, [primaryTreatment?.total, patient.treatmentSessions]);
+    if (primaryTreatment?.technician) {
+      setSelectedTechnician(primaryTreatment.technician);
+    } else {
+      setSelectedTechnician('KTV. Lê Văn Sơn');
+    }
+    setIsEditingCustomPlan(false);
+    setCustomPlanInput('');
+  }, [patient.id, primaryTreatment?.id, primaryTreatment?.total, primaryTreatment?.technician, patient.treatmentSessions]);
 
   // Active selected modalities codes
   const selectedModalities: string[] = React.useMemo(() => {
@@ -314,6 +326,7 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
         plan: finalPlan,
         total: finalSessions,
         modalities: finalModalities,
+        technician: selectedTechnician || primaryTreatment.technician || 'KTV. Lê Văn Sơn',
         sessions: updatedSessions,
       });
     } else if (onAddTreatment) {
@@ -329,6 +342,7 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
         status: 'Đang điều trị',
         addedFromEMR: true,
         doctor: currentUser?.name || patient.revisitDoctor || 'BS. CKII Hoàng Minh',
+        technician: selectedTechnician || 'KTV. Lê Văn Sơn',
         modalities: finalModalities,
         sessions: updatedSessions,
       };
@@ -648,6 +662,26 @@ export const DoctorPrescribedProtocolsSection: React.FC<DoctorPrescribedProtocol
                     className="w-14 px-2 py-1 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                   <span className="text-[11px] text-slate-500">buổi</span>
+                </div>
+
+                {/* USER REQUIREMENT: ĐỒNG BỘ KTV TRỰC TIẾP LÀM TỪ EMR */}
+                <div className="flex items-center space-x-1.5 bg-teal-50/80 px-2.5 py-1 rounded-xl border border-teal-200">
+                  <span className="text-[11px] font-bold text-teal-800 whitespace-nowrap">KTV làm:</span>
+                  <select
+                    value={selectedTechnician}
+                    onChange={(e) => {
+                      setSelectedTechnician(e.target.value);
+                      if (primaryTreatment && onUpdateTreatment) {
+                        onUpdateTreatment({ ...primaryTreatment, technician: e.target.value });
+                      }
+                    }}
+                    className="bg-white border border-teal-300 text-teal-950 font-bold text-xs rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer shadow-2xs"
+                    title="Bác sĩ phân công KTV trực tiếp phụ trách thực hiện phác đồ này"
+                  >
+                    <option value="KTV. Lê Văn Sơn">KTV. Lê Văn Sơn (Vận động)</option>
+                    <option value="KTV. Trần Minh Đức">KTV. Trần Minh Đức (Máy)</option>
+                    <option value="KTV. Phạm Quang Huy">KTV. Phạm Quang Huy (Tay)</option>
+                  </select>
                 </div>
               </div>
             )}

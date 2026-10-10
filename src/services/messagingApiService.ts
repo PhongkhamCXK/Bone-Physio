@@ -9,7 +9,10 @@ export type MessagingProvider =
   | 'twilio'
   | 'web_push'
   | 'zalo_zns'
-  | 'portal';
+  | 'portal'
+  | 'resend'
+  | 'sendgrid'
+  | 'smtp';
 
 export interface MessagingApiConfig {
   smsProvider: 'esms' | 'speedsms' | 'twilio';
@@ -26,6 +29,12 @@ export interface MessagingApiConfig {
   // Zalo ZNS config
   zaloAppId: string;
   zaloSecretKey: string;
+
+  // Email API config
+  emailProvider: 'resend' | 'sendgrid' | 'smtp';
+  emailSender: string;
+  emailApiKey: string;
+  emailAutoSend: boolean;
   
   sandboxMode: boolean; // Chế độ kiểm thử / sandbox
   clinicHotline: string;
@@ -35,10 +44,12 @@ export interface SendReminderApiPayload {
   patientId: string;
   patientName: string;
   phone: string;
-  channel: 'sms' | 'push' | 'portal' | 'zalo';
+  recipientEmail?: string;
+  channel: 'sms' | 'push' | 'portal' | 'zalo' | 'email';
   provider: MessagingProvider;
   message: string;
   pushTitle?: string;
+  emailSubject?: string;
   doctor: string;
   revisitDate: string;
   daysRemaining: number;
@@ -50,7 +61,7 @@ export interface SendReminderApiResponse {
   success: boolean;
   transactionId: string;
   provider: string;
-  channel: 'sms' | 'push' | 'portal' | 'zalo';
+  channel: 'sms' | 'push' | 'portal' | 'zalo' | 'email';
   statusCode: number;
   statusText: string;
   sentAt: string;
@@ -75,6 +86,10 @@ export const DEFAULT_MESSAGING_CONFIG: MessagingApiConfig = {
   pushAppId: 'bone-physio-clinic-webpush',
   zaloAppId: '20268849129',
   zaloSecretKey: 'ZALO_OA_SECRET_BONE_PHYSIO',
+  emailProvider: 'resend',
+  emailSender: 'cskh@bonephysio.vn',
+  emailApiKey: 're_bonephysio_live_prod_2026_sec998124',
+  emailAutoSend: true,
   sandboxMode: false,
   clinicHotline: '0901 234 567',
 };
@@ -211,6 +226,10 @@ export async function dispatchReminderApi(
     providerName = 'Zalo ZNS Business API (OA: Bone Physio)';
     transactionId = `TXN_ZNS_${Date.now().toString().slice(-8)}`;
     costVnd = 280;
+  } else if (payload.channel === 'email') {
+    providerName = `${config.emailProvider.toUpperCase()} Email API Gateway (${config.emailSender})`;
+    transactionId = `TXN_MAIL_${Date.now().toString().slice(-8)}`;
+    costVnd = 0;
   } else {
     providerName = 'Cổng EMR & Patient Portal';
     transactionId = `TXN_PORTAL_${Date.now().toString().slice(-8)}`;

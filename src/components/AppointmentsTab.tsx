@@ -18,10 +18,12 @@ import {
   LogOut,
   Check,
   ArrowRight,
+  Mail,
 } from 'lucide-react';
 import { uid } from '../data/seedData';
 import { getAppointmentMinutesUntil } from '../utils/appointmentNotificationManager';
 import { ConfirmModal } from './ConfirmModal';
+import { SendAppointmentEmailModal } from './SendAppointmentEmailModal';
 import { smartSearchMatch } from '../utils/textUtils';
 
 interface AppointmentsTabProps {
@@ -53,6 +55,8 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [apptToDelete, setApptToDelete] = useState<Appointment | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [selectedApptForEmail, setSelectedApptForEmail] = useState<Appointment | null>(null);
 
   // Form state
   const [patientId, setPatientId] = useState('');
@@ -549,6 +553,17 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
                       <div className="flex items-center justify-end space-x-1">
                         <button
                           type="button"
+                          onClick={() => {
+                            setSelectedApptForEmail(appt);
+                            setIsEmailModalOpen(true);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition"
+                          title="Gửi email nhắc lịch khám tới bệnh nhân này"
+                        >
+                          <Mail className="w-4 h-4 text-indigo-600" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleOpenEdit(appt)}
                           className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
                           title="Sửa lịch hẹn"
@@ -813,6 +828,17 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
           }
         />
       )}
+
+      {/* Modal Gửi Email Nhắc Lịch Khám */}
+      <SendAppointmentEmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setSelectedApptForEmail(null);
+        }}
+        appointment={selectedApptForEmail}
+        patient={patients.find((p) => p.id === selectedApptForEmail?.patientId)}
+      />
     </div>
   );
 };

@@ -32,6 +32,7 @@ import { uid } from '../data/seedData';
 import { calculateClinicTax } from '../utils/taxCalculation';
 import { ExpenseModal } from './accounting/ExpenseModal';
 import { TaxConfigModal } from './accounting/TaxConfigModal';
+import { ReceiptPrintModal } from './ReceiptPrintModal';
 
 interface BillingTabProps {
   invoices: Invoice[];
@@ -77,6 +78,7 @@ export const BillingTab: React.FC<BillingTabProps> = ({
 
   // Modals
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [isTaxConfigModalOpen, setIsTaxConfigModalOpen] = useState(false);
@@ -92,6 +94,7 @@ export const BillingTab: React.FC<BillingTabProps> = ({
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState<number>(1500000);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [invoiceSalesStaff, setInvoiceSalesStaff] = useState('Nguyễn Thị Thảo');
 
   // Tax calculation result
   const taxSummary = calculateClinicTax(invoices, expenses, taxConfig);
@@ -105,10 +108,12 @@ export const BillingTab: React.FC<BillingTabProps> = ({
       setPatientId(patients[0].id);
       setPatientManualName(patients[0].name);
       setDescription(`Vật lý trị liệu cột sống & khớp - ${patients[0].name}`);
+      setInvoiceSalesStaff(patients[0].salesStaff || 'Nguyễn Thị Thảo');
     } else {
       setPatientId('KHACH_LE');
       setPatientManualName('Bệnh nhân mới');
       setDescription('Vật lý trị liệu chuyên sâu & Giảm áp cột sống');
+      setInvoiceSalesStaff('Nguyễn Thị Thảo');
     }
     setAmount(1500000);
     setDate(new Date().toISOString().split('T')[0]);
@@ -138,6 +143,8 @@ export const BillingTab: React.FC<BillingTabProps> = ({
       status: 'Chưa thanh toán',
       debtType: 'Toàn bộ',
       debtRemaining: Number(amount),
+      salesStaff: invoiceSalesStaff,
+      commissionAmount: Math.round(Number(amount) * 0.05),
     };
     onAddInvoice(newInv);
     setIsInvoiceModalOpen(false);
@@ -195,10 +202,14 @@ export const BillingTab: React.FC<BillingTabProps> = ({
               <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold tracking-wide">
                 HỆ THỐNG KẾ TOÁN Y TẾ
               </span>
-              <span className="text-xs text-slate-500 font-medium">
+              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                taxConfig.taxModel === 'corporate_20'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}>
                 {taxConfig.taxModel === 'corporate_20'
-                  ? 'Mô hình Doanh nghiệp (Thuế TNDN 20% & VAT 0% KCB)'
-                  : 'Mô hình Hộ KD / Phòng khám khoán (2% Doanh thu)'}
+                  ? '🏢 Mô hình Doanh Nghiệp (TNDN 20% & VAT 0%)'
+                  : `🏠 Mô hình Thuế Khoán (${taxConfig.householdRate || 2}% Doanh Thu)`}
               </span>
             </div>
             <h2 className="text-2xl font-black text-slate-900 mt-1">
@@ -209,12 +220,41 @@ export const BillingTab: React.FC<BillingTabProps> = ({
             </p>
           </div>
 
-          {/* Action buttons */}
+          {/* Action buttons & 1-Click Tax Model Switcher */}
           <div className="flex items-center flex-wrap gap-2.5">
+            {/* Quick 1-Click Tax Model Switcher */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-xs">
+              <button
+                type="button"
+                onClick={() => onUpdateTaxConfig({ ...taxConfig, taxModel: 'corporate_20' })}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                  taxConfig.taxModel === 'corporate_20'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+                title="Bấm để chuyển ngay sang mô hình Doanh Nghiệp (Thuế TNDN 20%)"
+              >
+                <span>🏢 Doanh Nghiệp (20%)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdateTaxConfig({ ...taxConfig, taxModel: 'household_lump_sum' })}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                  taxConfig.taxModel === 'household_lump_sum'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+                title="Bấm để chuyển ngay sang mô hình Thuế Khoán (2% Doanh thu)"
+              >
+                <span>🏠 Thuế Khoán ({taxConfig.householdRate || 2}%)</span>
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => setIsTaxConfigModalOpen(true)}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition"
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition shadow-xs"
+              title="Mở bảng cấu hình chi tiết thuế suất"
             >
               <Settings className="w-4 h-4 text-slate-600" />
               <span>Cấu Hình Thuế</span>
@@ -370,20 +410,29 @@ export const BillingTab: React.FC<BillingTabProps> = ({
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <div>
-                  <span className="text-xs text-slate-400 block">Thuế TNDN 20%:</span>
-                  <span className="text-lg font-black text-slate-900">
+                  <span className="text-xs font-bold block text-slate-500">
+                    {taxConfig.taxModel === 'household_lump_sum'
+                      ? `Thuế Khoán ${taxConfig.householdRate || 2}%:`
+                      : `Thuế TNDN ${taxConfig.citRate || 20}%:`}
+                  </span>
+                  <span className="text-lg font-black text-rose-600">
                     {formatCurrency(taxSummary.totalTaxObligation)}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-slate-400 block">LN Ròng:</span>
+                  <span className="text-xs text-slate-400 block font-semibold">LN Ròng Sau Thuế:</span>
                   <span className={`text-lg font-black ${taxSummary.netProfitAfterTax >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {formatCurrency(taxSummary.netProfitAfterTax)}
                   </span>
                 </div>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Tỷ suất LN ròng: <strong className="text-emerald-600">{taxSummary.profitMarginPercent}%</strong>
+                {taxConfig.taxModel === 'household_lump_sum'
+                  ? `Áp dụng TT 40/2021 (${taxConfig.householdRate || 2}% trên doanh thu)`
+                  : `Tỷ suất LN ròng: `}
+                {taxConfig.taxModel !== 'household_lump_sum' && (
+                  <strong className="text-emerald-600">{taxSummary.profitMarginPercent}%</strong>
+                )}
               </p>
             </div>
             {/* 5. Tỷ Suất LN & Hiệu Suất */}
@@ -591,13 +640,18 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                     <th className="py-4 px-5">Mã HĐ & Bệnh Nhân</th>
                     <th className="py-4 px-5">Dịch Vụ Điều Trị</th>
                     <th className="py-4 px-5">Số Tiền (Thu)</th>
+                    <th className="py-4 px-5 text-amber-900">Nhân Viên Sale Phụ Trách</th>
                     <th className="py-4 px-5">Ngày Lập</th>
                     <th className="py-4 px-5">Trạng Thái</th>
                     <th className="py-4 px-5 text-right">Thao Tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredInvoices.map((inv) => (
+                  {filteredInvoices.map((inv) => {
+                    const matchedPatient = patients.find((p) => p.id === inv.patientId || p.name === inv.patientName);
+                    const effectiveSale = inv.salesStaff || matchedPatient?.salesStaff || 'Chưa gán';
+
+                    return (
                     <tr key={inv.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-4 px-5">
                         <span className="font-bold text-slate-900 block text-sm">
@@ -612,6 +666,15 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                       </td>
                       <td className="py-4 px-5 font-bold text-slate-900 text-sm">
                         {formatCurrency(inv.amount)}
+                      </td>
+                      <td className="py-4 px-5">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 font-bold text-[11px] inline-flex items-center gap-1">
+                          <span>👤</span>
+                          <span>{effectiveSale}</span>
+                        </span>
+                        <span className="block text-[10.5px] text-slate-500 font-medium mt-0.5">
+                          Gán từ: {matchedPatient?.salesStaff ? 'Hồ sơ BN' : 'Hóa đơn'}
+                        </span>
                       </td>
                       <td className="py-4 px-5 text-slate-600">{inv.date}</td>
                       <td className="py-4 px-5">
@@ -647,9 +710,9 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                           )}
                           <button
                             type="button"
-                            onClick={handlePrint}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition"
-                            title="In hóa đơn"
+                            onClick={() => setPrintingInvoice(inv)}
+                            className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition"
+                            title="In phiếu thu tiền / biên nhận thanh toán (A5)"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
@@ -668,7 +731,8 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {filteredInvoices.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-10 text-center text-slate-400 text-xs">
@@ -879,33 +943,61 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                   {formatCurrency(taxSummary.totalRevenue)}
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Tổng các hóa đơn khám chữa bệnh, phục hồi chức năng đã thanh toán đủ tiền.
+                  Tổng các hóa đơn khám chữa bệnh, phục hồi chức năng đã thu tiền thực tế.
                 </p>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider block">
-                  Bước 2: Chi Phí Hợp Lý Được Khấu Trừ (C hợp lệ)
-                </span>
-                <div className="text-xl font-black text-rose-600">
-                  {formatCurrency(taxSummary.deductibleExpense)}
+              {taxConfig.taxModel === 'household_lump_sum' ? (
+                <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-1.5">
+                  <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
+                    Bước 2: Chi Phí Thực Tế ($C$ thực tế)
+                  </span>
+                  <div className="text-xl font-black text-amber-900">
+                    {formatCurrency(taxSummary.totalExpense)}
+                  </div>
+                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                    Tổng chi thực tế phòng khám (Phương pháp khoán không cần chứng minh hóa đơn đỏ hợp lệ).
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Các khoản chi (thuê nhà, vật tư y tế, điện nước...) có hóa đơn đỏ GTGT hợp lệ.
-                </p>
-              </div>
+              ) : (
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                  <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider block">
+                    Bước 2: Chi Phí Hợp Lý Khấu Trừ ($C$ hợp lệ)
+                  </span>
+                  <div className="text-xl font-black text-rose-600">
+                    {formatCurrency(taxSummary.deductibleExpense)}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Các khoản chi (thuê nhà, vật tư, máy móc...) có hóa đơn GTGT hợp lệ để trừ thuế TNDN.
+                  </p>
+                </div>
+              )}
 
-              <div className="p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200 space-y-1.5">
-                <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">
-                  Bước 3: Thu Nhập Chịu Thuế TNDN
-                </span>
-                <div className="text-xl font-black text-indigo-900">
-                  {formatCurrency(taxSummary.taxableIncome)}
+              {taxConfig.taxModel === 'household_lump_sum' ? (
+                <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1.5">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+                    Bước 3: Thuế Khoán Trên Doanh Thu ({taxConfig.householdRate || 2}%)
+                  </span>
+                  <div className="text-xl font-black text-emerald-700">
+                    {formatCurrency(taxSummary.householdLumpSumTax)}
+                  </div>
+                  <p className="text-[11px] text-emerald-700 leading-relaxed">
+                    Thuế khoán = Doanh thu x {taxConfig.householdRate || 2}% (Thông tư 40/2021)
+                  </p>
                 </div>
-                <p className="text-[11px] text-indigo-700 leading-relaxed">
-                  Thu nhập chịu thuế = Doanh thu - Chi phí hợp lệ
-                </p>
-              </div>
+              ) : (
+                <div className="p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200 space-y-1.5">
+                  <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">
+                    Bước 3: Thu Nhập Chịu Thuế TNDN
+                  </span>
+                  <div className="text-xl font-black text-indigo-900">
+                    {formatCurrency(taxSummary.taxableIncome)}
+                  </div>
+                  <p className="text-[11px] text-indigo-700 leading-relaxed">
+                    Thu nhập chịu thuế = Doanh thu - Chi phí hợp lệ
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Detailed Tax Breakdown Table */}
@@ -920,88 +1012,188 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  <tr className="hover:bg-slate-50">
-                    <td className="py-3 px-4 font-semibold text-slate-900">
-                      1. Thuế Giá Trị Gia Tăng (VAT)
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">
-                      Khoản 9 Điều 5 Luật Thuế GTGT (Dịch vụ KCB không chịu thuế)
-                    </td>
-                    <td className="py-3 px-4 font-mono font-bold text-emerald-600">
-                      {taxConfig.vatRate}% (Miễn thuế)
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">
-                      {formatCurrency(taxSummary.vatPayable)}
-                    </td>
-                  </tr>
+                  {taxConfig.taxModel === 'household_lump_sum' ? (
+                    <>
+                      <tr className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          1. Thuế Khoán Trực Tiếp Trên Doanh Thu
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          Thông tư 40/2021/TT-BTC: Dịch vụ y tế chăm sóc sức khỏe áp dụng tỷ lệ khoán {taxConfig.householdRate || 2}% trên doanh thu
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-emerald-600">
+                          {taxConfig.householdRate || 2}%
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">
+                          {formatCurrency(taxSummary.householdLumpSumTax)}
+                        </td>
+                      </tr>
 
-                  <tr className="hover:bg-slate-50">
-                    <td className="py-3 px-4 font-semibold text-slate-900">
-                      2. Thuế Thu Nhập Doanh Nghiệp (TNDN)
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">
-                      Thuế TNDN phổ thông trên thu nhập tính thuế: (Doanh thu - Chi phí có HĐ đỏ) x 20%
-                    </td>
-                    <td className="py-3 px-4 font-mono font-bold text-blue-600">
-                      {taxConfig.citRate}%
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-blue-600">
-                      {formatCurrency(taxSummary.citPayable)}
-                    </td>
-                  </tr>
+                      <tr className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          2. Chi Phí Thực Tế Phòng Khám
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          Tổng chi thực tế: {formatCurrency(taxSummary.totalExpense)} (Phương pháp khoán không cần đối soát hóa đơn VAT đầu vào)
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-500">
+                          Miễn đối soát HĐ
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-400">
+                          0 ₫
+                        </td>
+                      </tr>
 
-                  <tr className="bg-slate-50 font-bold">
-                    <td className="py-3.5 px-4 text-slate-900">
-                      TỔNG NGHĨA VỤ THUẾ PHẢI NỘP
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600">
-                      VAT + TNDN
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600 font-mono">
-                      Hiệu dụng: {taxSummary.effectiveTaxRatePercent}%
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono text-base text-rose-600">
-                      {formatCurrency(taxSummary.totalTaxObligation)}
-                    </td>
-                  </tr>
+                      <tr className="bg-emerald-50/40 font-bold">
+                        <td className="py-3.5 px-4 text-slate-900">
+                          TỔNG THUẾ KHOÁN PHẢI NỘP
+                        </td>
+                        <td className="py-3.5 px-4 text-emerald-800">
+                          Thuế khoán trọn gói theo doanh thu
+                        </td>
+                        <td className="py-3.5 px-4 text-emerald-800 font-mono">
+                          {taxConfig.householdRate || 2}%
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-base text-rose-600">
+                          {formatCurrency(taxSummary.totalTaxObligation)}
+                        </td>
+                      </tr>
 
-                  <tr className="bg-emerald-50/50 font-bold">
-                    <td className="py-3.5 px-4 text-emerald-900">
-                      LỢI NHUẬN RÒNG SAU THUẾ (NET PROFIT)
-                    </td>
-                    <td className="py-3.5 px-4 text-emerald-700">
-                      Lợi nhuận kế toán (Thu - Chi) - Tổng thuế
-                    </td>
-                    <td className="py-3.5 px-4 text-emerald-700 font-mono">
-                      Biên LN: {taxSummary.profitMarginPercent}%
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono text-base text-emerald-700">
-                      {formatCurrency(taxSummary.netProfitAfterTax)}
-                    </td>
-                  </tr>
+                      <tr className="bg-emerald-50/70 font-bold">
+                        <td className="py-3.5 px-4 text-emerald-950">
+                          LỢI NHUẬN RÒNG SAU THUẾ KHOÁN
+                        </td>
+                        <td className="py-3.5 px-4 text-emerald-800">
+                          Doanh thu - Tổng chi thực tế - Thuế khoán
+                        </td>
+                        <td className="py-3.5 px-4 text-emerald-800 font-mono">
+                          Biên LN: {taxSummary.profitMarginPercent}%
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-base text-emerald-800">
+                          {formatCurrency(taxSummary.netProfitAfterTax)}
+                        </td>
+                      </tr>
+                    </>
+                  ) : (
+                    <>
+                      <tr className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          1. Thuế Giá Trị Gia Tăng (VAT)
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          Khoản 9 Điều 5 Luật Thuế GTGT (Dịch vụ KCB không chịu thuế)
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-emerald-600">
+                          {taxConfig.vatRate}% (Miễn thuế)
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">
+                          {formatCurrency(taxSummary.vatPayable)}
+                        </td>
+                      </tr>
+
+                      <tr className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          2. Thuế Thu Nhập Doanh Nghiệp (TNDN)
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          Thuế TNDN phổ thông trên thu nhập tính thuế: (Doanh thu - Chi phí có HĐ đỏ) x 20%
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-blue-600">
+                          {taxConfig.citRate}%
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-blue-600">
+                          {formatCurrency(taxSummary.citPayable)}
+                        </td>
+                      </tr>
+
+                      <tr className="bg-slate-50 font-bold">
+                        <td className="py-3.5 px-4 text-slate-900">
+                          TỔNG NGHĨA VỤ THUẾ PHẢI NỘP
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600">
+                          VAT + TNDN
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 font-mono">
+                          Hiệu dụng: {taxSummary.effectiveTaxRatePercent}%
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-base text-rose-600">
+                          {formatCurrency(taxSummary.totalTaxObligation)}
+                        </td>
+                      </tr>
+
+                      <tr className="bg-emerald-50/50 font-bold">
+                        <td className="py-3.5 px-4 text-emerald-900">
+                          LỢI NHUẬN RÒNG SAU THUẾ (NET PROFIT)
+                        </td>
+                        <td className="py-3.5 px-4 text-emerald-700">
+                          Lợi nhuận kế toán (Thu - Chi) - Tổng thuế
+                        </td>
+                        <td className="py-3.5 px-4 text-emerald-700 font-mono">
+                          Biên LN: {taxSummary.profitMarginPercent}%
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-base text-emerald-700">
+                          {formatCurrency(taxSummary.netProfitAfterTax)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
 
-            {/* Comparison with Household Lump Sum */}
+            {/* Comparison with Alternative Model & Instant Switcher */}
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <span className="text-xs font-bold text-slate-800 block">
-                  So sánh với phương án Phòng Khám Khoán (Hộ Kinh Doanh):
+                  {taxConfig.taxModel === 'household_lump_sum'
+                    ? 'Đang áp dụng: Mô hình Thuế Khoán Hộ KD (Thông tư 40/2021)'
+                    : 'So sánh với phương án Phòng Khám Khoán (Hộ Kinh Doanh):'}
                 </span>
                 <span className="text-xs text-slate-500">
-                  Nếu kê khai theo Thông tư 40/2021 (khoán {taxConfig.householdRate}% trên tổng doanh thu): Thuế khoán ước tính là{' '}
-                  <strong className="text-slate-800 font-semibold">{formatCurrency(taxSummary.householdLumpSumTax)}</strong>
+                  {taxConfig.taxModel === 'household_lump_sum' ? (
+                    <>
+                      Nếu áp dụng phương án Doanh Nghiệp (TNDN 20% sau khấu trừ): Thuế ước tính là{' '}
+                      <strong className="text-blue-700 font-bold">{formatCurrency(taxSummary.citPayable)}</strong>
+                    </>
+                  ) : (
+                    <>
+                      Nếu kê khai theo Thông tư 40/2021 (khoán {taxConfig.householdRate || 2}% trên tổng doanh thu): Thuế khoán ước tính là{' '}
+                      <strong className="text-emerald-700 font-bold">{formatCurrency(taxSummary.householdLumpSumTax)}</strong>
+                    </>
+                  )}
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsTaxConfigModalOpen(true)}
-                className="px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 transition shrink-0"
-              >
-                Chuyển Mô Hình Thuế
-              </button>
+              <div className="flex items-center space-x-2 shrink-0">
+                {taxConfig.taxModel === 'household_lump_sum' ? (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateTaxConfig({ ...taxConfig, taxModel: 'corporate_20' })}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1 cursor-pointer"
+                    title="Bấm để chuyển sang mô hình Thuế Doanh Nghiệp 20%"
+                  >
+                    <span>🏢 Chuyển Sang Doanh Nghiệp (20%)</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateTaxConfig({ ...taxConfig, taxModel: 'household_lump_sum' })}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1 cursor-pointer"
+                    title="Bấm để chuyển ngay sang mô hình Thuế Khoán 2%"
+                  >
+                    <span>⚡ Chuyển Sang Thuế Khoán ({taxConfig.householdRate || 2}%)</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsTaxConfigModalOpen(true)}
+                  className="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 transition"
+                  title="Tùy chỉnh tỷ lệ % chi tiết"
+                >
+                  ⚙ Cấu Hình
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1034,7 +1226,10 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                     onChange={(e) => {
                       setPatientId(e.target.value);
                       const p = patients.find((item) => item.id === e.target.value);
-                      if (p) setPatientManualName(p.name);
+                      if (p) {
+                        setPatientManualName(p.name);
+                        if (p.salesStaff) setInvoiceSalesStaff(p.salesStaff);
+                      }
                     }}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none font-semibold text-slate-800"
                   >
@@ -1100,6 +1295,22 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Nhân Viên Sale Phụ Trách (Tự Động Ghi Nhận Doanh Thu)
+                </label>
+                <select
+                  value={invoiceSalesStaff}
+                  onChange={(e) => setInvoiceSalesStaff(e.target.value)}
+                  className="w-full px-4 py-2 bg-amber-50/70 border border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:ring-2 focus:ring-amber-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="Nguyễn Thị Thảo">👤 Sale: Nguyễn Thị Thảo</option>
+                  <option value="Trần Bảo Yến">👤 Sale: Trần Bảo Yến</option>
+                  <option value="Hoàng Mai Linh">👤 Sale: Hoàng Mai Linh</option>
+                  <option value="Chưa gán">Chưa gán bạn Sale</option>
+                </select>
+              </div>
+
               <div className="flex justify-end space-x-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -1156,13 +1367,27 @@ export const BillingTab: React.FC<BillingTabProps> = ({
                 <p className="text-xs text-slate-500 font-mono">
                   Mã giao dịch: {paymentSuccessCode}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setPayingInvoice(null)}
-                  className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition"
-                >
-                  Đóng
-                </button>
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inv = payingInvoice;
+                      setPayingInvoice(null);
+                      setPrintingInvoice(inv);
+                    }}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold hover:from-emerald-700 hover:to-teal-700 transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>In Phiếu Thu A5 Ngay</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayingInvoice(null)}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    Đóng
+                  </button>
+                </div>
               </div>
             ) : isSimulatingPayment ? (
               <div className="text-center py-8 space-y-2">
@@ -1263,6 +1488,14 @@ export const BillingTab: React.FC<BillingTabProps> = ({
         onClose={() => setIsTaxConfigModalOpen(false)}
         config={taxConfig}
         onSave={onUpdateTaxConfig}
+      />
+
+      {/* A5 Printable Receipt Modal */}
+      <ReceiptPrintModal
+        isOpen={Boolean(printingInvoice)}
+        onClose={() => setPrintingInvoice(null)}
+        invoice={printingInvoice}
+        patient={patients.find((p) => p.id === printingInvoice?.patientId || p.name === printingInvoice?.patientName)}
       />
     </div>
   );

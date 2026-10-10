@@ -20,7 +20,10 @@ import {
   ChevronRight,
   Sparkles,
   AlertTriangle,
+  Mail,
+  CheckCheck,
 } from 'lucide-react';
+import { sendUpcomingAppointmentEmail } from '../services/emailService';
 
 interface UpcomingAppointmentToastProps {
   upcomingNotices: UpcomingAppointmentNotice[];
@@ -29,6 +32,7 @@ interface UpcomingAppointmentToastProps {
   onViewAppointmentsTab: () => void;
   onDismissNotice: (appointmentId: string) => void;
   onSnoozeNotice: (appointmentId: string, minutes?: number) => void;
+  onSendEmailSuccess?: (appointmentId: string, recipientEmail: string) => void;
 }
 
 export const UpcomingAppointmentToast: React.FC<UpcomingAppointmentToastProps> = ({
@@ -38,6 +42,7 @@ export const UpcomingAppointmentToast: React.FC<UpcomingAppointmentToastProps> =
   onViewAppointmentsTab,
   onDismissNotice,
   onSnoozeNotice,
+  onSendEmailSuccess,
 }) => {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -55,6 +60,8 @@ export const UpcomingAppointmentToast: React.FC<UpcomingAppointmentToastProps> =
 
   const [activeNoticeIndex, setActiveNoticeIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [sendingEmailApptId, setSendingEmailApptId] = useState<string | null>(null);
+  const [sentEmailApptIds, setSentEmailApptIds] = useState<string[]>([]);
 
   // Keep index within bounds if list shrinks
   useEffect(() => {
@@ -282,16 +289,51 @@ export const UpcomingAppointmentToast: React.FC<UpcomingAppointmentToastProps> =
             )}
 
             {/* Quick action buttons */}
-            <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
               {/* Check-in Ngay */}
               <button
                 type="button"
                 onClick={() => onCheckIn(appt)}
-                className="col-span-1 py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center space-x-1 transition active:scale-95 cursor-pointer"
+                className="py-2 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center space-x-1 transition active:scale-95 cursor-pointer"
                 title="Đón bệnh nhân vào khám ngay (chuyển sang trạng thái Đang khám)"
               >
                 <UserCheck className="w-3.5 h-3.5" />
                 <span>Check-in</span>
+              </button>
+
+              {/* Gửi Email Nhắc Lịch Khám */}
+              <button
+                type="button"
+                disabled={sendingEmailApptId === appt.id || sentEmailApptIds.includes(appt.id)}
+                onClick={async () => {
+                  try {
+                    setSendingEmailApptId(appt.id);
+                    const record = await sendUpcomingAppointmentEmail(appt);
+                    setSentEmailApptIds((prev) => [...prev, appt.id]);
+                    if (onSendEmailSuccess) {
+                      onSendEmailSuccess(appt.id, record.recipientEmail);
+                    }
+                  } catch (err) {
+                    console.error('Lỗi gửi email nhắc hẹn:', err);
+                  } finally {
+                    setSendingEmailApptId(null);
+                  }
+                }}
+                className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition active:scale-95 cursor-pointer ${
+                  sentEmailApptIds.includes(appt.id)
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20'
+                }`}
+                title="Gửi email nhắc nhở lịch hẹn khám tới bệnh nhân"
+              >
+                {sendingEmailApptId === appt.id ? (
+                  <span className="animate-spin text-xs">⏳</span>
+                ) : sentEmailApptIds.includes(appt.id) ? (
+                  <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <Mail className="w-3.5 h-3.5" />
+                )}
+                <span>{sentEmailApptIds.includes(appt.id) ? 'Đã gửi Email' : 'Gửi Email'}</span>
               </button>
 
               {/* Mở EMR */}
@@ -304,7 +346,7 @@ export const UpcomingAppointmentToast: React.FC<UpcomingAppointmentToastProps> =
                     onViewAppointmentsTab();
                   }
                 }}
-                className="col-span-1 py-2 px-2 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition active:scale-95 cursor-pointer"
+                className="py-2 px-2 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition active:scale-95 cursor-pointer"
                 title="Mở hồ sơ bệnh án EMR"
               >
                 <FileText className="w-3.5 h-3.5 text-blue-600" />
@@ -315,7 +357,7 @@ export const UpcomingAppointmentToast: React.FC<UpcomingAppointmentToastProps> =
               <button
                 type="button"
                 onClick={() => onSnoozeNotice(appt.id, 10)}
-                className="col-span-1 py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1 transition active:scale-95 cursor-pointer"
+                className="py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1 transition active:scale-95 cursor-pointer"
                 title="Tạm hoãn nhắc nhở lịch hẹn này trong 10 phút"
               >
                 <Clock className="w-3.5 h-3.5 text-slate-500" />
